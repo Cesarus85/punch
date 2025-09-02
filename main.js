@@ -31,20 +31,25 @@ window.addEventListener('resize', () => {
 const BALL_RADIUS = 0.12;
 const FIST_RADIUS = 0.11;
 const SPAWN_DISTANCE = 2.5;     // m vor initialer Blickrichtung
-const SIDE_OFFSET = 0.5;        // m links/rechts
+const SIDE_OFFSET = 0.5;        // m links/rechts (normal)
+const SIDE_OFFSET_TIGHT = 0.25; // m links/rechts (eng)
+const TIGHT_PROB = 0.45;        // Wahrscheinlichkeit für "eng"
 const BALL_SPEED = 1.6;         // m/s
 const SPAWN_INTERVAL = 0.65;    // s zwischen Spawns
-const IMPACT_RADIUS = 0.35;     // m -> Miss, wenn Ball so nahe kommt
 const PUNCH_SPEED = 0.6;        // m/s Mindestgeschwindigkeit der Faust
 
-// Spawn-Höhenbegrenzung: nie über Headset, bis zu 0.70 m darunter (relativ zur INITIALEN Up-Achse)
-const SPAWN_MAX_BELOW = 0.70;   // m
+// Spawn-Höhenbegrenzung relativ zur INITIALEN Up-Achse
+const SPAWN_MAX_BELOW = 0.70;   // m (max 70 cm unter Headset, nie darüber)
+
+// "Miss"-Erkennung: Ebene an der initialen Körper-Position
+// Wenn der Ball diese Ebene erreicht/überschreitet (ohne Treffer) -> Miss.
+const MISS_PLANE_OFFSET = 0.02; // m vor der Ebene (kleiner Puffer; 0.00 = exakt Ebene)
 
 // Scoreboard-Positionierung (am Boden, leicht nach oben geneigt)
 const HUD_FORWARD = 1.0;        // m vor initialer Position
 const HUD_TILT_DEG = 20;        // Grad Neigung nach oben
 const HUD_PLANE_W = 0.50;
-const HUD_PLANE_H = 0.25;       // Unterkante steht auf y=0, daher liegt Center bei HUD_PLANE_H/2
+const HUD_PLANE_H = 0.25;       // Unterkante steht auf y=0, Center = HUD_PLANE_H/2
 
 // GLB-Ball
 const BALL_URL = './assets/ball.glb'; // ggf. anpassen
@@ -52,11 +57,11 @@ const BALL_URL = './assets/ball.glb'; // ggf. anpassen
 //
 // --- „Initial Pose Lock“ ---
 let poseLocked = false;
-let iPos = new THREE.Vector3();       // initiale Position (Kopf)
+let iPos = new THREE.Vector3();       // initiale Kopfposition
 let iQuat = new THREE.Quaternion();   // initiale Orientierung
-let iForward = new THREE.Vector3();   // vorwärts (aus iQuat)
-let iUp = new THREE.Vector3();        // oben (aus iQuat)
-let iRight = new THREE.Vector3();     // rechts (iForward x iUp)
+let iForward = new THREE.Vector3();   // vorwärts
+let iUp = new THREE.Vector3();        // oben
+let iRight = new THREE.Vector3();     // rechts
 
 function lockInitialPose() {
   iPos.setFromMatrixPosition(camera.matrixWorld);
@@ -67,7 +72,6 @@ function lockInitialPose() {
   iRight.crossVectors(iForward, iUp).normalize();
 
   poseLocked = true;
-  // Scoreboard platzieren, sobald wir die Pose kennen
   placeHUDOnFloorInitial();
 }
 
@@ -76,7 +80,7 @@ renderer.xr.addEventListener('sessionstart', () => {
 });
 
 //
-// --- Ressourcen für Fäuste ---
+// --- Fäuste (Controller) ---
 const fistGeo = new THREE.SphereGeometry(FIST_RADIUS, 16, 12);
 const fistMat = new THREE.MeshStandardMaterial({ color: 0xffc043, metalness: 0.2, roughness: 0.7 });
 
@@ -135,20 +139,16 @@ scene.add(hudPlane);
 function placeHUDOnFloorInitial() {
   if (!poseLocked) return;
 
-  // Unterkante auf Boden (y ~ 0) -> Center auf HUD_PLANE_H/2
-  const y = HUD_PLANE_H / 2 + 0.02; // 2cm über Boden
-
-  // Position: ein Stück vor der initialen Position, entlang initialer Vorwärtsrichtung
+  const y = HUD_PLANE_H / 2 + 0.02; // 2 cm über Boden
   hudPlane.position.set(
     iPos.x + iForward.x * HUD_FORWARD,
     y,
     iPos.z + iForward.z * HUD_FORWARD
   );
 
-  // Orientierung: zum Spieler (entlang -iForward) blicken, dann leicht nach oben neigen
+  // Schild blickt zum Spieler (entlang -iForward) und wird leicht nach oben geneigt
   const lookTarget = new THREE.Vector3().copy(hudPlane.position).sub(iForward);
   hudPlane.lookAt(lookTarget);
-  // leichte Neigung nach oben (Top weg vom Spieler)
   hudPlane.rotateX(THREE.MathUtils.degToRad(HUD_TILT_DEG));
 }
 
@@ -165,21 +165,18 @@ loader.load(
   (gltf) => {
     ballPrefab = gltf.scene;
 
-    // Bounding-Box für automatische Skalierung
+    // automatische Skalierung auf BALL_RADIUS
     const box = new THREE.Box3().setFromObject(ballPrefab);
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     ballScaleFactor = (2 * BALL_RADIUS) / maxDim;
 
-    // Materialien transparent erlauben (für Fade-Out)
+    // Transparenz für Fade-Out
     ballPrefab.traverse((n) => {
       if (n.isMesh && n.material) {
-        if (Array.isArray(n.material)) {
-          n.material.forEach(m => { m.transparent = true; });
-        } else {
-          n.material.transparent = true;
-        }
+        if (Array.isArray(n.material)) n.material.forEach(m => { m.transparent = true; });
+        else n.material.transparent = true;
       }
     });
 
@@ -187,9 +184,7 @@ loader.load(
     console.log('[AR Punch] ball.glb geladen. ScaleFactor =', ballScaleFactor.toFixed(3));
   },
   undefined,
-  (err) => {
-    console.error('Fehler beim Laden von ball.glb:', err);
-  }
+  (err) => console.error('Fehler beim Laden von ball.glb:', err)
 );
 
 function setObjectOpacity(obj, opacity) {
@@ -202,9 +197,9 @@ function setObjectOpacity(obj, opacity) {
 }
 
 //
-// --- Ball Pool/Logik (GLB-Objekte) ---
-const balls = []; // aktive: { obj, velocity, alive, spin, spinAxis, spinSpeed }
-const pool = [];  // recycelte Object3D-Instanzen
+// --- Ball Pool/Logik ---
+const balls = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot }
+const pool = [];
 
 function getBallObject() {
   let obj = pool.pop();
@@ -224,16 +219,20 @@ function releaseBallObject(obj) {
 function spawnBall(sideSign /* -1 links, +1 rechts */) {
   if (!ballPrefabReady || !poseLocked) return;
 
-  // Höhe max. Headset (0), min. bis 0.70 m darunter (negativ) — alles relativ zur INITIALEN Up-Achse
+  // eng oder normal?
+  const sideMag = Math.random() < TIGHT_PROB ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
+
+  // Höhe: max Headset, bis zu 0.70 m darunter (relativ zur initialen Up-Achse)
   const heightOffset = -Math.random() * SPAWN_MAX_BELOW; // [0, -0.70]
 
+  // Spawnposition relativ zur INITIALEN Pose
   const spawnPos = new THREE.Vector3()
     .copy(iPos)
     .addScaledVector(iForward, SPAWN_DISTANCE)
-    .addScaledVector(iRight, SIDE_OFFSET * sideSign)
+    .addScaledVector(iRight, sideMag * sideSign)
     .addScaledVector(iUp, heightOffset);
 
-  // Flugrichtung: konstant auf den Spieler zu (entlang -initialForward), NICHT zur aktuellen Kopfposition „homing“
+  // konstante Flugrichtung auf den Spieler zu (kein Homing)
   const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-BALL_SPEED);
 
   const obj = getBallObject();
@@ -248,19 +247,23 @@ function spawnBall(sideSign /* -1 links, +1 rechts */) {
     spinSpeed = THREE.MathUtils.lerp(0.5, 2.0, Math.random()); // rad/s
   }
 
+  // prevDot: projektierte Distanz entlang iForward von iPos aus (bei Spawn ~ SPAWN_DISTANCE)
+  const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
+
   balls.push({
     obj,
     velocity,
     alive: true,
     spin,
     spinAxis,
-    spinSpeed
+    spinSpeed,
+    prevDot
   });
 }
 
 function hitBall(ball) {
   ball.alive = false;
-  setObjectOpacity(ball.obj, 0.25);         // kurzer „Auflösen“-Effekt
+  setObjectOpacity(ball.obj, 0.25);
   setTimeout(() => releaseBallObject(ball.obj), 60);
   hits++;
   drawHUD();
@@ -280,18 +283,15 @@ let spawnTimer = 0;
 let sideSwitch = 1; // alterniert +1 / -1
 
 function updateFists(dt) {
-  // Weltposition/Velocity berechnen
   for (const f of fists) {
     const worldPos = new THREE.Vector3();
     f.mesh.getWorldPosition(worldPos);
-    // v = (p - prev)/dt
     f.velocity.copy(worldPos).sub(f.prevPos).multiplyScalar(1 / Math.max(dt, 1e-4));
     f.prevPos.copy(worldPos);
   }
 }
 
 function fistsBallCollision(ball) {
-  // Treffer nur wenn Faust ausreichend schnell und in Richtung Ball
   const ballPos = ball.obj.getWorldPosition(new THREE.Vector3());
   for (const f of fists) {
     const fistPos = f.mesh.getWorldPosition(new THREE.Vector3());
@@ -299,7 +299,7 @@ function fistsBallCollision(ball) {
     const dist = toBall.length();
     if (dist <= (BALL_RADIUS + FIST_RADIUS)) {
       const v = f.velocity;
-      if (v.length() >= PUNCH_SPEED && toBall.dot(v) > 0) { // bewegt sich Richtung Ball
+      if (v.length() >= PUNCH_SPEED && toBall.dot(v) > 0) { // Faust bewegt sich zum Ball
         return true;
       }
     }
@@ -310,9 +310,8 @@ function fistsBallCollision(ball) {
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
 
-  // Einmalig: initiale Pose kurz nach Start festhalten
+  // Initialpose einmalig locken (nach Start)
   if (renderer.xr.isPresenting && !poseLocked) {
-    // eine Frame-Latenz abwarten, damit camera.matrixWorld valide ist
     lockInitialPose();
   }
 
@@ -327,35 +326,36 @@ renderer.setAnimationLoop(() => {
   }
 
   // Bälle bewegen, drehen und prüfen
-  const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-
   for (let i = balls.length - 1; i >= 0; i--) {
     const b = balls[i];
     if (!b.alive) { balls.splice(i,1); continue; }
 
-    // Translation (konstante Richtung)
+    // Bewegung
     b.obj.position.addScaledVector(b.velocity, dt);
 
-    // Optional: Rotation
+    // Rotation (optional)
     if (b.spin) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
 
-    // Miss, wenn Ball nahe an Kopf vorbeikommt
-    const distToHead = b.obj.position.distanceTo(camPos);
-    if (distToHead <= IMPACT_RADIUS) {
-      missBall(b);
-      balls.splice(i,1);
-      continue;
-    }
-
-    // Treffer?
+    // --- Treffer zuerst prüfen (gleicher Frame vorrangig) ---
     if (fistsBallCollision(b)) {
       hitBall(b);
       balls.splice(i,1);
       continue;
     }
 
-    // Safety: weit hinter Spieler -> weg
-    if (distToHead > 6.0) {
+    // --- Miss prüfen: Ebene überschritten? ---
+    // Projektionsdistanz entlang initialer Vorwärtsachse relativ zu iPos
+    const currDot = new THREE.Vector3().subVectors(b.obj.position, iPos).dot(iForward);
+    // Vorher vor der Ebene ( > MISS_PLANE_OFFSET ), jetzt auf/über Ebene ( <= MISS_PLANE_OFFSET )?
+    if (b.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET) {
+      missBall(b);
+      balls.splice(i,1);
+      continue;
+    }
+    b.prevDot = currDot;
+
+    // Safety: sehr weit weg hinter der Ebene -> weg (falls irgendwas durchrutscht)
+    if (currDot < -6.0) {
       b.alive = false;
       releaseBallObject(b.obj);
       balls.splice(i,1);
