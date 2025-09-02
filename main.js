@@ -6,13 +6,16 @@ import {
   BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET,
   HUD_PLANE_H, SPAWN_BIAS,
   DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
-  AUDIO_ENABLED, HAPTICS_ENABLED
+  AUDIO_ENABLED, HAPTICS_ENABLED,
+  HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
+  GAME_MODE, SPRINT_DURATION, COMBO_STEP, COMBO_MAX_MULT
 } from './config.js';
 
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, makeBall, setOpacity } from './ball.js';
-import { hitSound, missSound } from './audio.js';
+import { createHazard } from './hazard.js';
+import { hitSound, missSound, penaltySound } from './audio.js';
 
 // ---------- Basis Setup ----------
 const scene = new THREE.Scene();
@@ -56,13 +59,11 @@ renderer.xr.addEventListener('sessionstart', () => { poseLocked = false; });
 
 // ---------- HUD ----------
 const hud = createHUD(scene);
-let hits = 0, misses = 0;
-// HUD-Depth aus (kleiner Stabilitäts-Boost)
 hud.plane.renderOrder = 10;
 hud.plane.material.depthWrite = false;
 hud.plane.material.depthTest  = false;
 
-// ---------- Fäuste (Controller + Hände) ----------
+// ---------- Fäuste ----------
 const fistsMgr = new FistsManager(renderer, scene);
 
 // ---------- Haptics ----------
@@ -75,7 +76,6 @@ function rumble(intensity = 0.8, durationMs = 60) {
     if (!gp || !gp.hapticActuators) continue;
     const act = gp.hapticActuators[0];
     if (!act) continue;
-    // Browser-Varianten
     if (typeof act.pulse === 'function') {
       try { act.pulse(intensity, durationMs); } catch {}
     } else if (typeof act.playEffect === 'function') {
@@ -89,10 +89,29 @@ function rumble(intensity = 0.8, durationMs = 60) {
   }
 }
 
-// ---------- Ball Handling ----------
+// ---------- Ball/Hazard State ----------
 await loadBall();
-const balls = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot, t, driftAmp, driftOmega, driftPhase, prevLateral }
+const balls   = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot, t, driftAmp, driftOmega, driftPhase, prevLateral }
+const hazards = []; // { obj, velocity, alive, prevDot }
 
+// ---------- Score/Combo/Timer ----------
+let hits = 0, misses = 0, score = 0, streak = 0;
+let gameMode = GAME_MODE; // 'endless' | 'sprint60'
+let timeLeft = (gameMode === 'sprint60') ? SPRINT_DURATION : null;
+const BEST_KEY = 'arpunch_best_sprint60';
+let best = (gameMode === 'sprint60') ? (Number(localStorage.getItem(BEST_KEY)) || 0) : null;
+
+function comboMultiplier() {
+  if (streak <= 0) return 1;
+  const mult = 1 + Math.floor(streak / COMBO_STEP);
+  return Math.min(COMBO_MAX_MULT, mult);
+}
+
+function updateHUD(note = '') {
+  hud.set({ hits, misses, score, streak, mode: gameMode, timeLeft, best, note });
+}
+
+// ---------- Spawn ----------
 function randRange(a, b) { return a + Math.random() * (b - a); }
 
 function spawnBall(sideSign) {
@@ -113,7 +132,7 @@ function spawnBall(sideSign) {
   obj.position.copy(spawnPos);
   scene.add(obj);
 
-  // Zufallsrotation: mal ja, mal nein
+  // zufällige Rotation
   const spin = Math.random() < 0.5;
   let spinAxis = null, spinSpeed = 0;
   if (spin) {
@@ -123,7 +142,7 @@ function spawnBall(sideSign) {
 
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
-  // Sinus-Drift (seitlich) – pro Ball eigene Parameter
+  // seitlicher Drift
   const driftAmp   = DRIFT_ENABLED ? randRange(DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE) : 0.0;
   const driftFreq  = DRIFT_ENABLED ? randRange(DRIFT_MIN_FREQ, DRIFT_MAX_FREQ) : 0.0;
   const driftOmega = DRIFT_ENABLED ? (2 * Math.PI * driftFreq) : 0.0;
@@ -136,26 +155,70 @@ function spawnBall(sideSign) {
   });
 }
 
-function hitBall(b) {
-  b.alive = false;
-  // optional Fade-Out (Materiale sind unique → kein globales Blinken)
-  setOpacity(b.obj, 0.25);
-  setTimeout(() => { scene.remove(b.obj); }, 60);
-  hits++; hud.set(hits, misses);
-  if (AUDIO_ENABLED) hitSound();
-  rumble(0.9, 60);
+function spawnHazard(sideSign) {
+  if (!poseLocked) return;
+
+  const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
+  const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
+
+  const spawnPos = new THREE.Vector3()
+    .copy(iPos)
+    .addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS))
+    .addScaledVector(iRight, sideMag * sideSign)
+    .addScaledVector(iUp, heightOffset);
+
+  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-HAZARD_SPEED);
+
+  const obj = createHazard();
+  obj.position.copy(spawnPos);
+  scene.add(obj);
+
+  const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
+
+  hazards.push({ obj, velocity, alive: true, prevDot });
 }
 
-function missBall(b) {
+// ---------- Hit/Miss/Penalty ----------
+function onBallHit(b) {
+  b.alive = false;
+  // Fade out (Materiale sind unique)
+  setOpacity(b.obj, 0.25);
+  setTimeout(() => { scene.remove(b.obj); }, 60);
+
+  hits++;
+  streak++;
+  const mult = comboMultiplier();
+  score += 1 * mult;
+
+  if (AUDIO_ENABLED) hitSound();
+  rumble(0.9, 60);
+  updateHUD();
+}
+
+function onBallMiss(b) {
   b.alive = false;
   scene.remove(b.obj);
-  misses++; hud.set(hits, misses);
+
+  misses++;
+  streak = 0;
   if (AUDIO_ENABLED) missSound();
   rumble(0.25, 40);
+  updateHUD();
+}
+
+function onHazardHit(h) {
+  h.alive = false;
+  scene.remove(h.obj);
+
+  streak = 0;
+  score = Math.max(0, score - HAZARD_PENALTY);
+  if (AUDIO_ENABLED) penaltySound();
+  rumble(1.0, 80);
+  updateHUD();
 }
 
 // ---------- Collision ----------
-function fistsBallCollision(ballPos, fists) {
+function fistsHit(ballPos, fists) {
   for (const f of fists) {
     const toBall = new THREE.Vector3().subVectors(ballPos, f.pos);
     const dist = toBall.length();
@@ -168,35 +231,73 @@ function fistsBallCollision(ballPos, fists) {
   return false;
 }
 
+function fistsHitHazard(hPos, fists) {
+  for (const f of fists) {
+    const toHaz = new THREE.Vector3().subVectors(hPos, f.pos);
+    const dist = toHaz.length();
+    if (dist <= (HAZARD_RADIUS + FIST_RADIUS)) {
+      if (f.vel.length() >= PUNCH_SPEED && toHaz.dot(f.vel) > 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // ---------- Game Loop ----------
 const clock = new THREE.Clock();
 let spawnTimer = 0;
-let sideSwitch = 1; // +1, -1, +1, ...
+let sideSwitch = 1; // +1, -1, +1...
 
 function loop() {
   const dt = clock.getDelta();
 
   if (renderer.xr.isPresenting && !poseLocked) {
     lockInitialPose();
+    // Timer initialisieren
+    if (gameMode === 'sprint60') {
+      timeLeft = SPRINT_DURATION;
+      updateHUD();
+    } else {
+      timeLeft = null;
+      updateHUD();
+    }
   }
 
   const fists = fistsMgr.update(dt); // [{pos, vel}, ...]
 
-  spawnTimer += dt;
-  if (spawnTimer >= SPAWN_INTERVAL) {
-    spawnBall(sideSwitch);
-    sideSwitch *= -1;
-    spawnTimer = 0;
+  // Timer
+  let canSpawn = true;
+  if (gameMode === 'sprint60' && timeLeft !== null) {
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      canSpawn = false; // keine neuen Spawns
+      // Highscore aktualisieren (einmalig)
+      if (best !== null && score > best) {
+        best = score;
+        try { localStorage.setItem(BEST_KEY, String(best)); } catch {}
+      }
+    }
   }
 
+  // Spawner
+  spawnTimer += dt;
+  if (canSpawn && spawnTimer >= SPAWN_INTERVAL) {
+    const side = sideSwitch; sideSwitch *= -1; spawnTimer = 0;
+    if (HAZARD_ENABLED && Math.random() < HAZARD_PROB) spawnHazard(side);
+    else spawnBall(side);
+  }
+
+  // --- Balls ---
   for (let i = balls.length - 1; i >= 0; i--) {
     const b = balls[i];
     if (!b.alive) { balls.splice(i, 1); continue; }
 
-    // Vorwärtsbewegung
+    // Vorwärts
     b.obj.position.addScaledVector(b.velocity, dt);
 
-    // Seitendrift (additiv, differenziell, damit keine „Doppelsumme“)
+    // Drift
     if (DRIFT_ENABLED && b.driftAmp > 0 && b.driftOmega > 0) {
       b.t += dt;
       const lateral = b.driftAmp * Math.sin(b.driftOmega * b.t + b.driftPhase);
@@ -205,28 +306,52 @@ function loop() {
       b.prevLateral = lateral;
     }
 
-    // Optional: Rotation
+    // Rotation
     if (b.spin) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
 
-    // Treffer zuerst prüfen
+    // Treffer
     const ballPos = b.obj.getWorldPosition(new THREE.Vector3());
-    if (fistsBallCollision(ballPos, fists)) {
-      hitBall(b); balls.splice(i, 1); continue;
-    }
+    if (fistsHit(ballPos, fists)) { onBallHit(b); balls.splice(i, 1); continue; }
 
     // Miss: initiale Ebene überschritten?
     const currDot = new THREE.Vector3().subVectors(b.obj.position, iPos).dot(iForward);
     if (b.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET) {
-      missBall(b); balls.splice(i, 1); continue;
+      onBallMiss(b); balls.splice(i, 1); continue;
     }
     b.prevDot = currDot;
 
-    // Safety: weit hinter Ebene -> entfernen
+    // Safety
     if (currDot < -6.0) {
       b.alive = false; scene.remove(b.obj); balls.splice(i, 1); continue;
     }
   }
 
+  // --- Hazards ---
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    const h = hazards[i];
+    if (!h.alive) { hazards.splice(i, 1); continue; }
+
+    h.obj.position.addScaledVector(h.velocity, dt);
+    // dezente Eigenrotation
+    const ax = h.obj.userData.spinAxis, sp = h.obj.userData.spinSpeed;
+    if (ax && sp) h.obj.rotateOnAxis(ax, sp * dt);
+
+    const hPos = h.obj.getWorldPosition(new THREE.Vector3());
+    if (fistsHitHazard(hPos, fists)) { onHazardHit(h); hazards.splice(i, 1); continue; }
+
+    const currDot = new THREE.Vector3().subVectors(h.obj.position, iPos).dot(iForward);
+    // wenn Hazard die Ebene erreicht/überschreitet -> einfach entfernen, keine Strafe/Belohnung
+    if (h.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET) {
+      h.alive = false; scene.remove(h.obj); hazards.splice(i, 1); continue;
+    }
+    h.prevDot = currDot;
+
+    if (currDot < -6.0) {
+      h.alive = false; scene.remove(h.obj); hazards.splice(i, 1); continue;
+    }
+  }
+
+  updateHUD(timeLeft === 0 ? 'Zeit!' : '');
   renderer.render(scene, camera);
 }
 
@@ -238,7 +363,8 @@ async function start() {
 
 renderer.xr.addEventListener('sessionend', () => {
   for (const b of balls) scene.remove(b.obj);
-  balls.length = 0;
+  for (const h of hazards) scene.remove(h.obj);
+  balls.length = 0; hazards.length = 0;
 });
 
 start();
