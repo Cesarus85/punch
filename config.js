@@ -35,8 +35,8 @@ export const HAPTICS_ENABLED = true;
 
 // --- Hazards (Step 4) ---
 export const HAZARD_ENABLED = true;
-export const HAZARD_PROB = 0.50;              // gern wieder auf 0.25 setzen
-export const FORCE_HAZARD_EVERY_N = 3;        // 0 = aus; z.B. jeder 3. Spawn garantiert Hazard
+export const HAZARD_PROB = 0.25;              // gern wieder auf 0.25 setzen
+export const FORCE_HAZARD_EVERY_N = 0;        // 0 = aus; z.B. jeder 3. Spawn garantiert Hazard
 export const HAZARD_RADIUS = 0.14;
 export const HAZARD_SPEED = BALL_SPEED;
 export const HAZARD_PENALTY = 2;
@@ -44,7 +44,7 @@ export const HAZARD_COLOR = 0xff4242;
 export const HAZARD_EMISSIVE_INTENSITY = 0.9; // damit Hazards „leuchten“ und immer sichtbar sind
 
 // --- Debug ---
-export const DEBUG_HAZARD_RING_MS = 500;      // 0 = aus; kurzer Ring-Flash am Hazard-Spawn
+export const DEBUG_HAZARD_RING_MS = 0;      // 0 = aus; kurzer Ring-Flash am Hazard-Spawn
 
 // --- Game Modes ---
 export const GAME_MODE = 'endless';           // 'endless' | 'sprint60'
