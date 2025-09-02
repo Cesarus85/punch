@@ -21,7 +21,7 @@ export function loadBall() {
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
         scaleFactor = (2 * BALL_RADIUS) / maxDim;
 
-        // Materialien "härten": opak, keine Transmission/Alpha/Mask
+        // Basismaterialien opak und „entschärft“
         scrubMaterials(prefab);
 
         ready = true;
@@ -36,12 +36,13 @@ export function loadBall() {
 export function isBallReady(){ return ready; }
 
 export function makeBall(){
+  // Tiefenklon + MATERIALIEN JE INSTANZ KLONEN
   const obj = prefab.clone(true);
+  makeMaterialsUnique(obj);     // <-- wichtig!
   obj.visible = true;
   obj.scale.setScalar(scaleFactor);
-  // sicherstellen, dass Klone auch "gehärtet" sind
-  scrubMaterials(obj);
-  setOpacity(obj, 1.0);
+  scrubMaterials(obj);          // opak, keine Transmission/AlphaTest
+  setOpacity(obj, 1.0);         // sicherheitshalber volle Deckkraft
   return obj;
 }
 
@@ -55,10 +56,10 @@ export function setOpacity(obj, opacity){
       m.alphaTest  = 0.0;
       m.blending   = THREE.NormalBlending;
     } else {
-      // nur für Fade-Out
+      // nur beim Ausblenden
       m.transparent = true;
       m.opacity = opacity;
-      m.depthWrite = false;      // weicheres Ausblenden
+      m.depthWrite = false;
       m.depthTest  = true;
       m.alphaTest  = 0.0;
       m.blending   = THREE.NormalBlending;
@@ -67,7 +68,7 @@ export function setOpacity(obj, opacity){
   });
 }
 
-// ---- helpers ----
+// ---------- Helfer ----------
 function traverseMats(obj, fn){
   obj.traverse((n)=>{
     if (n.isMesh && n.material){
@@ -77,11 +78,22 @@ function traverseMats(obj, fn){
   });
 }
 
+function makeMaterialsUnique(obj){
+  obj.traverse((n)=>{
+    if (n.isMesh && n.material){
+      if (Array.isArray(n.material)){
+        n.material = n.material.map(m => m.clone());
+      } else {
+        n.material = n.material.clone();
+      }
+      // Texturen bleiben per Referenz geteilt (ok), aber Materialinstanz ist unique
+    }
+  });
+}
+
 function scrubMaterials(obj){
   traverseMats(obj, (m)=>{
-    // GLTF kann MeshStandard/Physical etc. liefern
     if (m.isMeshPhysicalMaterial){
-      // Transmission/Glas ausschalten
       m.transmission = 0.0;
       m.thickness = 0.0;
       m.attenuationDistance = 1e9;
@@ -89,7 +101,6 @@ function scrubMaterials(obj){
       m.sheen = 0.0;
       m.clearcoat = 0.0;
     }
-    // Alpha/Blend/Mask neutralisieren
     m.transparent = false;
     m.opacity = 1.0;
     m.alphaMap = null;
@@ -97,7 +108,7 @@ function scrubMaterials(obj){
     m.depthWrite = true;
     m.depthTest  = true;
     m.blending   = THREE.NormalBlending;
-    m.side = THREE.FrontSide; // bei Bedarf: DoubleSide
+    m.side = THREE.FrontSide;
     m.needsUpdate = true;
   });
 }
