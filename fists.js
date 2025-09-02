@@ -1,75 +1,89 @@
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
-import { FIST_RADIUS } from './config.js';
+import { XRControllerModelFactory } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/XRControllerModelFactory.js?module';
 
-
-class Fist {
-constructor(getter){
-this.getter = getter; // () => Vector3 (aktuelle Weltposition)
-this.prev = new THREE.Vector3();
-this.vel = new THREE.Vector3();
-this.initialized = false;
-}
-update(dt){
-const p = this.getter();
-if (!this.initialized){ this.prev.copy(p); this.initialized = true; }
-this.vel.copy(p).sub(this.prev).multiplyScalar(1/Math.max(dt,1e-4));
-this.prev.copy(p);
-return { pos: p, vel: this.vel };
-}
-}
-
-
+// Options:
+//  - showControllerModels: true => echte Controller-Modelle (wenn verfügbar)
+//  - sphereVisRadius: Visual-Radius der gelben Kugeln (nur falls keine Modelle)
 export class FistsManager {
-constructor(renderer, scene){
-this.renderer = renderer;
-this.scene = scene;
-this.fists = []; // Array<Fist>
+  constructor(renderer, scene, opts = {}) {
+    this.renderer = renderer;
+    this.scene = scene;
+    this.opts = Object.assign({ showControllerModels: true, sphereVisRadius: 0.03 }, opts);
 
+    this.controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
+    this.grips = [renderer.xr.getControllerGrip(0), renderer.xr.getControllerGrip(1)];
+    this.hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
 
-// Controller-Fäuste (sichtbare kleine Sphären optional)
-const fistGeo = new THREE.SphereGeometry(FIST_RADIUS, 16, 12);
-const fistMat = new THREE.MeshStandardMaterial({ color: 0xffc043, metalness: 0.2, roughness: 0.7 });
+    this.prev = [new THREE.Vector3(), new THREE.Vector3()];
+    this.vel = [new THREE.Vector3(), new THREE.Vector3()];
+    this.tmp = new THREE.Vector3();
 
+    // Visuals
+    if (this.opts.showControllerModels) {
+      const factory = new XRControllerModelFactory();
+      for (let i=0;i<this.grips.length;i++){
+        const grip = this.grips[i];
+        if (!grip) continue;
+        const model = factory.createControllerModel(grip);
+        grip.add(model);
+        scene.add(grip);
+      }
+    } else {
+      // kleine gelbe Kugeln als Visuals
+      this.spheres = [];
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffe066 });
+      for (let i=0;i<this.controllers.length;i++){
+        const s = new THREE.Mesh(new THREE.SphereGeometry(this.opts.sphereVisRadius, 16, 12), mat.clone());
+        this.controllers[i].add(s);
+        this.spheres.push(s);
+        scene.add(this.controllers[i]);
+      }
+    }
 
-for (let i=0;i<2;i++){
-const grip = renderer.xr.getControllerGrip(i);
-scene.add(grip);
-const mesh = new THREE.Mesh(fistGeo, fistMat);
-mesh.visible = true; // bei Bedarf auf false setzen
-grip.add(mesh);
-this.fists.push(new Fist(() => mesh.getWorldPosition(new THREE.Vector3())));
-}
+    // init pos
+    for (let i=0;i<2;i++) this.prev[i].set(0,0,0);
+    this._initialized = false;
+  }
 
+  _getControllerPos(i, out){
+    const ctrl = this.controllers[i];
+    if (ctrl && ctrl.visible) {
+      ctrl.getWorldPosition(out);
+      return true;
+    }
+    // Fallback: Grip (besseres Tracking für Modelle)
+    const grip = this.grips[i];
+    if (grip) { grip.getWorldPosition(out); return true; }
 
-// Hand‑Tracking (optional): mittlere Knöchel als Faustzentrum (wenn verfügbar)
-for (let i=0;i<2;i++){
-const hand = renderer.xr.getHand(i);
-scene.add(hand);
-// Getter nutzt vorhandene Joints; Fallback: Hand-Wurzel
-const getter = () => {
-// Auswahl mehrerer Joints für stabilen Mittelwert
-const names = [
-'index-finger-metacarpal',
-'middle-finger-metacarpal',
-'ring-finger-metacarpal'
-];
-const acc = new THREE.Vector3();
-let n = 0;
-for (const name of names){
-const j = hand.joints && hand.joints[name];
-if (j){ acc.add(j.getWorldPosition(new THREE.Vector3())); n++; }
-}
-if (n>0){ return acc.multiplyScalar(1/n); }
-return hand.getWorldPosition(new THREE.Vector3());
-};
-this.fists.push(new Fist(getter));
-}
-}
+    // Fallback Hands: index knuckle
+    const hand = this.hands[i];
+    if (hand && hand.joints && hand.joints['index-finger-metacarpal']) {
+      hand.joints['index-finger-metacarpal'].getWorldPosition(out);
+      return true;
+    }
+    return false;
+  }
 
+  update(dt) {
+    const fists = [];
+    const alpha = THREE.MathUtils.clamp(dt * 12.0, 0, 1); // smoothing
 
-update(dt){
-const out = [];
-for (const f of this.fists){ out.push(f.update(dt)); }
-return out; // [{pos, vel}, ...]
-}
+    for (let i=0;i<2;i++){
+      const pos = new THREE.Vector3();
+      if (!this._getControllerPos(i, pos)) continue;
+
+      if (!this._initialized) {
+        this.prev[i].copy(pos);
+      }
+
+      // Velocity (exponential smoothing)
+      const v = this.tmp.copy(pos).sub(this.prev[i]).multiplyScalar(1/Math.max(1e-4, dt));
+      this.vel[i].lerp(v, alpha);
+      this.prev[i].copy(pos);
+
+      fists.push({ pos: pos.clone(), vel: this.vel[i].clone() });
+    }
+    this._initialized = true;
+    return fists;
+  }
 }
