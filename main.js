@@ -1,4 +1,3 @@
-// main.js – Modi: Driftsteuerung + Doppelspawn bei geraden Bällen
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARButton.js?module';
 
@@ -19,7 +18,7 @@ import { createHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 
-// ---------------- Basis Setup ----------------
+// ---------- Basis ----------
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
 
@@ -39,7 +38,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ---------------- Initial Pose Lock ----------------
+// ---------- Initial Pose ----------
 let poseLocked = false;
 const iPos = new THREE.Vector3();
 const iQuat = new THREE.Quaternion();
@@ -57,28 +56,28 @@ function lockInitialPose() {
 
   // HUD & Menü platzieren
   hud.place({ iPos, iForward, iRight });
-  // HUD zu Start NICHT anzeigen
-  hud.plane.visible = false;
-
+  hud.plane.visible = false; // HUD erst nach Countdown
   menu.placeAt(iPos, iForward, iUp);
+  menu.setMode('prestart');
   menu.setVisible(true);
   game.menuActive = true;
   game.running = false;
-}
 
+  placePauseButton(); // nach HUD platziert
+}
 renderer.xr.addEventListener('sessionstart', () => { poseLocked = false; });
 
-// ---------------- HUD ----------------
+// ---------- HUD ----------
 const hud = createHUD(scene);
 hud.plane.renderOrder = 10;
 hud.plane.material.depthWrite = false;
 hud.plane.material.depthTest  = false;
-hud.plane.visible = false; // wichtig: beim Start-Overlay aus
+hud.plane.visible = false;
 
-// ---------------- Fäuste ----------------
+// ---------- Fäuste ----------
 const fistsMgr = new FistsManager(renderer, scene);
 
-// ---------------- Haptik ----------------
+// ---------- Haptik ----------
 function rumble(intensity = 0.8, durationMs = 60) {
   if (!HAPTICS_ENABLED) return;
   const session = renderer.xr.getSession?.();
@@ -101,49 +100,26 @@ function rumble(intensity = 0.8, durationMs = 60) {
   }
 }
 
-// ---------------- Menü (Overlay + Raycast) ----------------
+// ---------- Menü ----------
 const DIFF_LABELS = ['Anfänger', 'Aufsteiger', 'Profi'];
 const SPEED_LABELS = ['Langsam', 'Mittel', 'Schnell'];
 
-// NEU: Modi definieren NUR Drift-Anteil (straightShare)
+// Drift-Anteil pro Modus (nur Balltrajektorien, alles andere unverändert)
 const DIFFICULTY_DRIFT = {
-  'Anfänger': 1.00, // 100% gerade
-  'Aufsteiger': 0.70, // überwiegend gerade, gemischt
-  'Profi': 0.25 // überwiegend S-Kurve, gemischt
+  'Anfänger': 1.00,  // 100% gerade
+  'Aufsteiger': 0.70,// überwiegend gerade
+  'Profi': 0.25      // überwiegend S-Kurve
 };
-// Doppelspawn-Chance wenn geradlinig
+// Chance auf Doppelspawn, wenn gerade dran ist
 const DOUBLE_STRAIGHT_PROB = 0.28;
 
-// Speed-Faktor (skalieren nur Geschwindigkeiten)
 const SPEED_PRESETS = { 'Langsam': 0.85, 'Mittel': 1.0, 'Schnell': 1.25 };
 
 const menu = createMenu(DIFF_LABELS, SPEED_LABELS);
 menu.group.visible = false;
 scene.add(menu.group);
 
-// Ray-Laser von Controllern (zur Menü-Bedienung)
-const raycaster = new THREE.Raycaster();
-const ctrls = [renderer.xr.getController(0), renderer.xr.getController(1)];
-for (let i = 0; i < ctrls.length; i++) {
-  const c = ctrls[i];
-  scene.add(c);
-  const geom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-1.5)]);
-  const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ transparent:true, opacity:0.85 }));
-  c.add(line);
-  c.addEventListener('selectstart', () => {
-    if (!game.menuActive) return;
-    const origin = new THREE.Vector3();
-    const dir = new THREE.Vector3(0,0,-1);
-    c.getWorldPosition(origin);
-    dir.applyQuaternion(c.quaternion).normalize();
-    raycaster.set(origin, dir);
-    const hovered = menu.updateHover(raycaster);
-    const action = menu.click(hovered);
-    if (action?.action === 'start') beginCountdown();
-  });
-}
-
-// ---------------- Countdown (3..0 sichtbar) ----------------
+// ---------- Countdown ----------
 let countdown = { active:false, time:0, plane:null, ctx:null, tex:null };
 
 function ensureCountdownPlane() {
@@ -156,11 +132,10 @@ function ensureCountdownPlane() {
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent:true, depthWrite:false });
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), mat);
   plane.name = 'countdown';
+  plane.visible = false;
   scene.add(plane);
   countdown = { active:false, time:0, plane, ctx, tex };
-  plane.visible = false;
 }
-
 function drawCountdown(n) {
   const { ctx, tex } = countdown;
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
@@ -173,14 +148,12 @@ function drawCountdown(n) {
   ctx.fillText(text, (ctx.canvas.width - tw)/2, 190);
   tex.needsUpdate = true;
 }
-
 function placeCountdown() {
   const pos = new THREE.Vector3().copy(iPos).addScaledVector(iForward, 1.0);
   const look = new THREE.Vector3().copy(pos).sub(iForward);
   countdown.plane.position.copy(pos);
   countdown.plane.lookAt(look);
 }
-
 function beginCountdown() {
   // Auswahl übernehmen
   const sel = menu.getSelection();
@@ -188,14 +161,10 @@ function beginCountdown() {
   const spdName  = SPEED_LABELS[sel.speedIndex];
   applyGamePreset(diffName, spdName);
 
-  // Runde zurücksetzen
   hardResetRound();
-
-  // Menü weg, HUD bleibt aus bis Start
   menu.setVisible(false);
   game.menuActive = false;
 
-  // Countdown
   ensureCountdownPlane();
   placeCountdown();
   countdown.active = true;
@@ -203,13 +172,13 @@ function beginCountdown() {
   drawCountdown(3);
 }
 
-// ---------------- Game-State & Presets ----------------
+// ---------- Game-State & Presets ----------
 const game = { menuActive: true, running: false };
 
 const tuning = {
   spawnInterval: SPAWN_INTERVAL,
-  straightShare: 1.0,          // Anteil geradlinig (aus Modus)
-  hazardProb: HAZARD_PROB,      // bleibt grundsätzlich gleich
+  straightShare: 1.0,
+  hazardProb: HAZARD_PROB,
   ballSpeed: BALL_SPEED,
   hazardSpeed: HAZARD_SPEED,
   driftMinAmp: DRIFT_MIN_AMPLITUDE,
@@ -219,24 +188,22 @@ const tuning = {
 };
 
 function applyGamePreset(diffName, speedName) {
-  tuning.straightShare = DIFFICULTY_DRIFT[diffName] ?? 1.0; // NUR Drift-Anteil
+  tuning.straightShare = DIFFICULTY_DRIFT[diffName] ?? 1.0;
   const sMul = SPEED_PRESETS[speedName] ?? 1.0;
   tuning.ballSpeed   = BALL_SPEED   * sMul;
   tuning.hazardSpeed = HAZARD_SPEED * sMul;
-
-  // Alle anderen Parameter bleiben wie konfiguriert
   tuning.spawnInterval = SPAWN_INTERVAL;
   tuning.hazardProb    = HAZARD_PROB;
 
-  // HUD Hinweis (wird erst nach Start sichtbar)
+  // Hinweis (erscheint erst nach Countdown)
   hud.set({ note: `${diffName} · ${speedName}` });
 }
 
-// ---------------- Assets & Score ----------------
+// ---------- Assets & Score ----------
 await loadBall();
 
-const balls   = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot, t, driftAmp, driftOmega, driftPhase, prevLateral }
-const hazards = []; // { obj, velocity, alive, prevDot }
+const balls   = [];
+const hazards = [];
 
 let hits = 0, misses = 0, score = 0, streak = 0;
 let gameMode = GAME_MODE; // 'endless' | 'sprint60'
@@ -253,7 +220,7 @@ function updateHUD(note='') {
   hud.set({ hits, misses, score, streak, mode: gameMode, timeLeft, best, note });
 }
 
-// ---------------- Debug-Ring (optional) ----------------
+// ---------- Debug-Ring (optional) ----------
 function flashSpawnRingAt(pos) {
   if (!DEBUG_HAZARD_RING_MS || DEBUG_HAZARD_RING_MS <= 0) return;
   const ringG = new THREE.TorusGeometry(0.12, 0.012, 8, 24);
@@ -266,7 +233,7 @@ function flashSpawnRingAt(pos) {
   setTimeout(() => scene.remove(ring), DEBUG_HAZARD_RING_MS);
 }
 
-// ---------------- Spawner ----------------
+// ---------- Spawner ----------
 function randRange(a, b) { return a + Math.random() * (b - a); }
 
 function spawnBall(sideSign, { forceStraight = false } = {}) {
@@ -285,10 +252,8 @@ function spawnBall(sideSign, { forceStraight = false } = {}) {
   obj.position.copy(spawnPos);
   scene.add(obj);
 
-  // Vorwärtsgeschwindigkeit
   const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.ballSpeed);
 
-  // Rotation (random)
   const spin = Math.random() < 0.5;
   let spinAxis = null, spinSpeed = 0;
   if (spin) {
@@ -298,7 +263,7 @@ function spawnBall(sideSign, { forceStraight = false } = {}) {
 
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
-  // Drift (nur wenn nicht erzwungen gerade)
+  // Drift (nur wenn nicht erzwingend gerade)
   let driftAmp = 0, driftOmega = 0, driftPhase = 0;
   if (!forceStraight) {
     driftAmp   = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
@@ -336,7 +301,7 @@ function spawnHazard(sideSign) {
   return spawnPos.clone();
 }
 
-// ---------------- Events ----------------
+// ---------- Events ----------
 function onBallHit(b) {
   b.alive = false;
   setOpacity(b.obj, 0.25);
@@ -344,26 +309,21 @@ function onBallHit(b) {
 
   hits++; streak++;
   score += comboMultiplier();
-
   if (AUDIO_ENABLED) hitSound();
   rumble(0.9, 60);
   updateHUD();
 }
-
 function onBallMiss(b) {
   b.alive = false;
   scene.remove(b.obj);
-
   misses++; streak = 0;
   if (AUDIO_ENABLED) missSound();
   rumble(0.25, 40);
   updateHUD();
 }
-
 function onHazardHit(h) {
   h.alive = false;
   scene.remove(h.obj);
-
   streak = 0;
   score = Math.max(0, score - HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
@@ -371,7 +331,7 @@ function onHazardHit(h) {
   updateHUD();
 }
 
-// ---------------- Collision ----------------
+// ---------- Collision ----------
 function fistsHit(ballPos, fists) {
   for (const f of fists) {
     const toBall = new THREE.Vector3().subVectors(ballPos, f.pos);
@@ -391,55 +351,110 @@ function fistsHitHazard(hPos, fists) {
   return false;
 }
 
-// ---------------- Round Control ----------------
+// ---------- Round Control ----------
 function hardResetRound() {
-  // Objekte entfernen
   for (const b of [...balls]) scene.remove(b.obj);
   for (const h of [...hazards]) scene.remove(h.obj);
   balls.length = 0; hazards.length = 0;
 
-  // Score/Timer reset
   hits = 0; misses = 0; score = 0; streak = 0;
   timeLeft = (gameMode === 'sprint60') ? SPRINT_DURATION : null;
-
   updateHUD('');
 }
 
-// Overlay im Spiel öffnen (X oder Pinch) → pausiert & beendet Runde
+// ---------- HUD-Pause-Button (klein, rechts oben am HUD) ----------
+let pauseBtn = null;
+function placePauseButton() {
+  if (pauseBtn) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,256,256);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0,0,256,256);
+  ctx.fillStyle = '#ffffff';
+  // „||“
+  ctx.fillRect(86,50,26,156);
+  ctx.fillRect(144,50,26,156);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent:true, depthWrite:false });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.08), mat);
+  mesh.name = 'pauseButton';
+  // an HUD-Ecke (oben rechts)
+  mesh.position.set( (0.50/2) - 0.05, (0.25/2) - 0.05, 0.005 ); // HUD_PLANE_W/H bekannt
+  hud.plane.add(mesh);
+  pauseBtn = mesh;
+  pauseBtn.visible = false; // erst im Spiel sichtbar
+}
+
 function openConfigOverlay() {
   if (game.menuActive) return;
   game.running = false;
   hardResetRound();
-  // HUD ausblenden während Overlay
-  hud.plane.visible = false;
-  // Overlay vor dir platzieren & zeigen
+  hud.plane.visible = false;   // HUD verstecken
+  pauseBtn.visible = false;    // Pausebutton weg
   menu.placeAt(iPos, iForward, iUp);
+  menu.setMode('ingame');
   menu.setVisible(true);
   game.menuActive = true;
 }
 
-// ---------------- Hand-Pinch (als Menü-Shortcut) ----------------
-const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
-let prevPinch = [false, false];
-function detectPinchOpenMenu() {
-  for (let i=0;i<hands.length;i++){
-    const hand = hands[i];
-    if (!hand || !hand.joints) continue;
-    const a = hand.joints['index-finger-tip'];
-    const b = hand.joints['thumb-tip'];
-    if (!a || !b) continue;
-    const pa = a.getWorldPosition(new THREE.Vector3());
-    const pb = b.getWorldPosition(new THREE.Vector3());
-    const d  = pa.distanceTo(pb);
-    const isPinch = d < 0.025; // ~2.5 cm
-    if (isPinch && !prevPinch[i] && !game.menuActive) {
-      openConfigOverlay();
-    }
-    prevPinch[i] = isPinch;
-  }
+// ---------- Controller-Input: „untere Face-Taste“ -> Overlay ----------
+function getLowerFaceButtonIndex(gp) {
+  // Robust: viele Browser liefern Buttons [0..] = trigger, squeeze, stick, face...
+  // Wir testen Kandidaten 3 und 4 (A/X liegen meist dort). Fallback: letzter Button.
+  if (!gp || !gp.buttons) return null;
+  if (gp.buttons[3]) return 3;
+  if (gp.buttons[4]) return 4;
+  const i = gp.buttons.length - 1;
+  return i >= 0 ? i : null;
 }
 
-// ---------------- Game Loop ----------------
+// keine Rays im Spiel — nur Overlay & Pause-Button Klick
+const raycaster = new THREE.Raycaster();
+const ctrls = [renderer.xr.getController(0), renderer.xr.getController(1)];
+for (const c of ctrls) {
+  scene.add(c);
+  // „selectstart“ für Menü-Bedienung & HUD-Pause-Button
+  c.addEventListener('selectstart', () => {
+    const origin = new THREE.Vector3();
+    const dir = new THREE.Vector3(0,0,-1);
+    c.getWorldPosition(origin);
+    dir.applyQuaternion(c.quaternion).normalize();
+
+    if (game.menuActive) {
+      raycaster.set(origin, dir);
+      const hovered = menu.updateHover(raycaster);
+      const action = menu.click(hovered);
+      if (!action) return;
+      if (action.action === 'start' || action.action === 'restart') beginCountdown();
+      else if (action.action === 'resume') { menu.setVisible(false); game.menuActive = false; hud.plane.visible = true; pauseBtn.visible = true; game.running = true; }
+      else if (action.action === 'quit')   { hardResetRound(); menu.setMode('prestart'); /* im Overlay bleiben */ }
+      return;
+    }
+
+    // Im Spiel: nur HUD-Pause-Button klickbar, ohne sichtbaren Ray
+    if (pauseBtn && pauseBtn.visible) {
+      // Nähe/Anvisieren prüfen (kleines Target)
+      const toBtn = new THREE.Vector3();
+      pauseBtn.getWorldPosition(toBtn);
+      const v = new THREE.Vector3().subVectors(toBtn, origin);
+      const dist = v.length();
+      const angle = Math.acos(THREE.MathUtils.clamp(dir.dot(v.clone().normalize()), -1, 1)) * 180/Math.PI;
+      if (dist <= 2.0 && angle <= 8) { // max 2m / 8°
+        // Ray-Schnitt
+        raycaster.set(origin, dir);
+        const hit = raycaster.intersectObject(pauseBtn, true)[0];
+        if (hit) openConfigOverlay();
+      }
+    }
+  });
+}
+
+// ---------- Hand-Pinch deaktiviert ----------
+/* (entfernt, um False-Positives zu vermeiden) */
+
+// ---------- Game Loop ----------
 const clock = new THREE.Clock();
 let spawnTimer = 0;
 let sideSwitch = 1;
@@ -447,40 +462,27 @@ let sideSwitch = 1;
 function loop() {
   const dt = clock.getDelta();
 
-  if (renderer.xr.isPresenting && !poseLocked) {
-    lockInitialPose();
-    // Noch im Overlay – Spiel läuft nicht
-    updateHUD('Konfigurieren & Starten');
-  }
-
-  // Controller-Buttons: X öffnet Overlay im Spiel
+  // Controller-Face-Button prüfen (A/X als „untere Taste“) — BEIDE Controller
   const session = renderer.xr.getSession?.();
   if (session) {
     if (!loop._btnPrev) loop._btnPrev = {};
     for (const src of session.inputSources) {
       const gp = src.gamepad;
-      if (!gp || !gp.buttons) continue;
-      const X = 2; // Button-Index: X
-      const pressed = !!(gp.buttons[X]?.pressed);
-      const key = `${src.handedness}:X`;
+      const idx = getLowerFaceButtonIndex(gp);
+      if (idx == null) continue;
+      const pressed = !!(gp.buttons[idx]?.pressed);
+      const key = `${src.handedness}:faceLower`;
       const prev = !!loop._btnPrev[key];
-      if (pressed && !prev && !game.menuActive) openConfigOverlay();
+      if (pressed && !prev) {
+        if (!game.menuActive) openConfigOverlay(); // Overlay öffnen (pausiert/endet Runde)
+      }
       loop._btnPrev[key] = pressed;
     }
   }
 
-  // Hand-Pinch als Shortcut
-  detectPinchOpenMenu();
-
-  // Ray-Hover (wenn Menü aktiv)
-  if (game.menuActive) {
-    for (const c of ctrls) {
-      const origin = new THREE.Vector3(); const dir = new THREE.Vector3(0,0,-1);
-      c.getWorldPosition(origin);
-      dir.applyQuaternion(c.quaternion).normalize();
-      raycaster.set(origin, dir);
-      menu.updateHover(raycaster);
-    }
+  if (renderer.xr.isPresenting && !poseLocked) {
+    lockInitialPose();
+    updateHUD('Konfigurieren & Starten');
   }
 
   // Countdown
@@ -492,8 +494,8 @@ function loop() {
     if (countdown.time <= 0) {
       countdown.active = false;
       countdown.plane.visible = false;
-      // JETZT Spiel starten + HUD sichtbar
-      hud.plane.visible = true;
+      hud.plane.visible = true;      // HUD jetzt zeigen
+      pauseBtn.visible = true;       // kleiner Pause-Button sichtbar
       game.running = true;
       updateHUD('');
     } else {
@@ -501,9 +503,16 @@ function loop() {
     }
   }
 
+  // Ray-Hover nur im Overlay (im Spiel aus)
+  if (game.menuActive) {
+    for (const src of session?.inputSources || []) {
+      const c = src.targetRayMode ? null : null; // (Hover wird on-demand in selectstart gesetzt; optional ign.)
+    }
+  }
+
   const fists = fistsMgr.update(dt);
 
-  // Timer nur wenn Spiel läuft
+  // Timer / Spawn nur wenn Spiel läuft
   let canSpawn = game.running;
   if (gameMode === 'sprint60' && timeLeft != null && game.running) {
     timeLeft -= dt;
@@ -515,22 +524,18 @@ function loop() {
     }
   }
 
-  // Spawns
+  // Spawner
   spawnTimer += dt;
   if (canSpawn && spawnTimer >= tuning.spawnInterval) {
     spawnTimer = 0;
     const side = sideSwitch; sideSwitch *= -1;
 
-    // Hazard?
     if (HAZARD_ENABLED && Math.random() < tuning.hazardProb) {
       const pos = spawnHazard(side);
       if (pos) flashSpawnRingAt(pos);
     } else {
-      // Entscheide geradlinig vs S-Kurve anhand Modus
       const isStraight = Math.random() < tuning.straightShare;
-
       if (isStraight && Math.random() < DOUBLE_STRAIGHT_PROB) {
-        // Doppelspawn: gleichzeitig links+rechts
         spawnBall(-1, { forceStraight: true });
         spawnBall(+1, { forceStraight: true });
       } else {
@@ -543,11 +548,7 @@ function loop() {
   for (let i = balls.length - 1; i >= 0; i--) {
     const b = balls[i];
     if (!b.alive) { balls.splice(i,1); continue; }
-
-    // Vorwärts
     b.obj.position.addScaledVector(b.velocity, dt);
-
-    // seitlicher Drift (nur wenn gesetzt)
     if (b.driftAmp > 0 && b.driftOmega > 0) {
       b.t += dt;
       const lateral = b.driftAmp * Math.sin(b.driftOmega * b.t + b.driftPhase);
@@ -555,22 +556,17 @@ function loop() {
       b.obj.position.addScaledVector(iRight, deltaLat);
       b.prevLateral = lateral;
     }
-
-    // Rotation
     if (b.spin) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
 
-    // Treffer
     const ballPos = b.obj.getWorldPosition(new THREE.Vector3());
     if (fistsHit(ballPos, fists)) { onBallHit(b); balls.splice(i,1); continue; }
 
-    // Miss
     const currDot = new THREE.Vector3().subVectors(b.obj.position, iPos).dot(iForward);
     if (b.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET) {
       onBallMiss(b); balls.splice(i,1); continue;
     }
     b.prevDot = currDot;
 
-    // Safety
     if (currDot < -6.0) { b.alive=false; scene.remove(b.obj); balls.splice(i,1); }
   }
 
@@ -578,7 +574,6 @@ function loop() {
   for (let i = hazards.length - 1; i >= 0; i--) {
     const h = hazards[i];
     if (!h.alive) { hazards.splice(i,1); continue; }
-
     h.obj.position.addScaledVector(h.velocity, dt);
     const ax = h.obj.userData.spinAxis, sp = h.obj.userData.spinSpeed;
     if (ax && sp) h.obj.rotateOnAxis(ax, sp * dt);
@@ -597,20 +592,18 @@ function loop() {
   renderer.render(scene, camera);
 }
 
-// ---------------- Start ----------------
+// ---------- Start ----------
 async function start() {
   try { await loadBall(); } catch (e) { console.error('ball.glb konnte nicht geladen werden:', e); }
   renderer.setAnimationLoop(loop);
 }
-
 renderer.xr.addEventListener('sessionend', () => {
   for (const b of balls) scene.remove(b.obj);
   for (const h of hazards) scene.remove(h.obj);
   balls.length = 0; hazards.length = 0;
-  // Overlay aus
   menu.setVisible(false);
   game.menuActive = false;
   hud.plane.visible = false;
+  if (pauseBtn) pauseBtn.visible = false;
 });
-
 start();
