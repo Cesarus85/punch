@@ -3,12 +3,16 @@ import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARB
 
 import {
   BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT, TIGHT_PROB,
-  BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET
+  BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET,
+  HUD_PLANE_H, SPAWN_BIAS,
+  DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
+  AUDIO_ENABLED, HAPTICS_ENABLED
 } from './config.js';
 
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, makeBall, setOpacity } from './ball.js';
+import { hitSound, missSound } from './audio.js';
 
 // ---------- Basis Setup ----------
 const scene = new THREE.Scene();
@@ -53,12 +57,43 @@ renderer.xr.addEventListener('sessionstart', () => { poseLocked = false; });
 // ---------- HUD ----------
 const hud = createHUD(scene);
 let hits = 0, misses = 0;
+// HUD-Depth aus (kleiner Stabilitäts-Boost)
+hud.plane.renderOrder = 10;
+hud.plane.material.depthWrite = false;
+hud.plane.material.depthTest  = false;
 
 // ---------- Fäuste (Controller + Hände) ----------
 const fistsMgr = new FistsManager(renderer, scene);
 
+// ---------- Haptics ----------
+function rumble(intensity = 0.8, durationMs = 60) {
+  if (!HAPTICS_ENABLED) return;
+  const session = renderer.xr.getSession?.();
+  if (!session) return;
+  for (const src of session.inputSources) {
+    const gp = src.gamepad;
+    if (!gp || !gp.hapticActuators) continue;
+    const act = gp.hapticActuators[0];
+    if (!act) continue;
+    // Browser-Varianten
+    if (typeof act.pulse === 'function') {
+      try { act.pulse(intensity, durationMs); } catch {}
+    } else if (typeof act.playEffect === 'function') {
+      try {
+        act.playEffect('dual-rumble', {
+          startDelay: 0, duration: durationMs,
+          weakMagnitude: intensity, strongMagnitude: intensity
+        });
+      } catch {}
+    }
+  }
+}
+
 // ---------- Ball Handling ----------
-const balls = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot }
+await loadBall();
+const balls = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot, t, driftAmp, driftOmega, driftPhase, prevLateral }
+
+function randRange(a, b) { return a + Math.random() * (b - a); }
 
 function spawnBall(sideSign) {
   if (!isBallReady() || !poseLocked) return;
@@ -68,7 +103,7 @@ function spawnBall(sideSign) {
 
   const spawnPos = new THREE.Vector3()
     .copy(iPos)
-    .addScaledVector(iForward, SPAWN_DISTANCE)
+    .addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS))
     .addScaledVector(iRight, sideMag * sideSign)
     .addScaledVector(iUp, heightOffset);
 
@@ -78,6 +113,7 @@ function spawnBall(sideSign) {
   obj.position.copy(spawnPos);
   scene.add(obj);
 
+  // Zufallsrotation: mal ja, mal nein
   const spin = Math.random() < 0.5;
   let spinAxis = null, spinSpeed = 0;
   if (spin) {
@@ -87,20 +123,35 @@ function spawnBall(sideSign) {
 
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
-  balls.push({ obj, velocity, alive: true, spin, spinAxis, spinSpeed, prevDot });
+  // Sinus-Drift (seitlich) – pro Ball eigene Parameter
+  const driftAmp   = DRIFT_ENABLED ? randRange(DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE) : 0.0;
+  const driftFreq  = DRIFT_ENABLED ? randRange(DRIFT_MIN_FREQ, DRIFT_MAX_FREQ) : 0.0;
+  const driftOmega = DRIFT_ENABLED ? (2 * Math.PI * driftFreq) : 0.0;
+  const driftPhase = Math.random() * Math.PI * 2;
+
+  balls.push({
+    obj, velocity, alive: true, spin, spinAxis, spinSpeed,
+    prevDot, t: 0,
+    driftAmp, driftOmega, driftPhase, prevLateral: 0
+  });
 }
 
 function hitBall(b) {
   b.alive = false;
+  // optional Fade-Out (Materiale sind unique → kein globales Blinken)
   setOpacity(b.obj, 0.25);
   setTimeout(() => { scene.remove(b.obj); }, 60);
   hits++; hud.set(hits, misses);
+  if (AUDIO_ENABLED) hitSound();
+  rumble(0.9, 60);
 }
 
 function missBall(b) {
   b.alive = false;
   scene.remove(b.obj);
   misses++; hud.set(hits, misses);
+  if (AUDIO_ENABLED) missSound();
+  rumble(0.25, 40);
 }
 
 // ---------- Collision ----------
@@ -142,17 +193,28 @@ function loop() {
     const b = balls[i];
     if (!b.alive) { balls.splice(i, 1); continue; }
 
+    // Vorwärtsbewegung
     b.obj.position.addScaledVector(b.velocity, dt);
+
+    // Seitendrift (additiv, differenziell, damit keine „Doppelsumme“)
+    if (DRIFT_ENABLED && b.driftAmp > 0 && b.driftOmega > 0) {
+      b.t += dt;
+      const lateral = b.driftAmp * Math.sin(b.driftOmega * b.t + b.driftPhase);
+      const deltaLat = lateral - b.prevLateral;
+      b.obj.position.addScaledVector(iRight, deltaLat);
+      b.prevLateral = lateral;
+    }
+
+    // Optional: Rotation
     if (b.spin) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
 
-    const ballPos = b.obj.getWorldPosition(new THREE.Vector3());
-
     // Treffer zuerst prüfen
+    const ballPos = b.obj.getWorldPosition(new THREE.Vector3());
     if (fistsBallCollision(ballPos, fists)) {
       hitBall(b); balls.splice(i, 1); continue;
     }
 
-    // Miss: initiale Ebene (durch iPos, senkrecht zu iForward) überschritten?
+    // Miss: initiale Ebene überschritten?
     const currDot = new THREE.Vector3().subVectors(b.obj.position, iPos).dot(iForward);
     if (b.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET) {
       missBall(b); balls.splice(i, 1); continue;
@@ -170,11 +232,7 @@ function loop() {
 
 // ---------- Start ----------
 async function start() {
-  try {
-    await loadBall(); // GLB einmalig laden & skalieren
-  } catch (e) {
-    console.error('ball.glb konnte nicht geladen werden:', e);
-  }
+  try { await loadBall(); } catch (e) { console.error('ball.glb konnte nicht geladen werden:', e); }
   renderer.setAnimationLoop(loop);
 }
 
