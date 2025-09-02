@@ -1,3 +1,4 @@
+// main.js – Modi: Driftsteuerung + Doppelspawn bei geraden Bällen
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARButton.js?module';
 
@@ -6,7 +7,7 @@ import {
   BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET, SPAWN_BIAS,
   DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
   AUDIO_ENABLED, HAPTICS_ENABLED,
-  HAZARD_ENABLED, HAZARD_PROB, HAZARD_SPEED, HAZARD_PENALTY,
+  HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
   GAME_MODE, SPRINT_DURATION, COMBO_STEP, COMBO_MAX_MULT,
   DEBUG_HAZARD_RING_MS
 } from './config.js';
@@ -56,9 +57,13 @@ function lockInitialPose() {
 
   // HUD & Menü platzieren
   hud.place({ iPos, iForward, iRight });
+  // HUD zu Start NICHT anzeigen
+  hud.plane.visible = false;
+
   menu.placeAt(iPos, iForward, iUp);
   menu.setVisible(true);
   game.menuActive = true;
+  game.running = false;
 }
 
 renderer.xr.addEventListener('sessionstart', () => { poseLocked = false; });
@@ -68,6 +73,7 @@ const hud = createHUD(scene);
 hud.plane.renderOrder = 10;
 hud.plane.material.depthWrite = false;
 hud.plane.material.depthTest  = false;
+hud.plane.visible = false; // wichtig: beim Start-Overlay aus
 
 // ---------------- Fäuste ----------------
 const fistsMgr = new FistsManager(renderer, scene);
@@ -99,57 +105,33 @@ function rumble(intensity = 0.8, durationMs = 60) {
 const DIFF_LABELS = ['Anfänger', 'Aufsteiger', 'Profi'];
 const SPEED_LABELS = ['Langsam', 'Mittel', 'Schnell'];
 
-// Schwierigkeits-Presets: Varianz/Komplexität/Hazards/Spawnrate
-const DIFFICULTY_PRESETS = {
-  'Anfänger': {
-    tightProb: 0.25,
-    hazardProb: Math.max(0.05, HAZARD_PROB * 0.5),
-    spawnIntervalFactor: 1.15,
-    driftAmpFactor: 0.6,
-    driftFreqFactor: 0.85
-  },
-  'Aufsteiger': {
-    tightProb: 0.45,
-    hazardProb: HAZARD_PROB,
-    spawnIntervalFactor: 1.0,
-    driftAmpFactor: 1.0,
-    driftFreqFactor: 1.0
-  },
-  'Profi': {
-    tightProb: 0.65,
-    hazardProb: Math.min(0.7, HAZARD_PROB * 1.6),
-    spawnIntervalFactor: 0.85,
-    driftAmpFactor: 1.35,
-    driftFreqFactor: 1.2
-  }
+// NEU: Modi definieren NUR Drift-Anteil (straightShare)
+const DIFFICULTY_DRIFT = {
+  'Anfänger': 1.00, // 100% gerade
+  'Aufsteiger': 0.70, // überwiegend gerade, gemischt
+  'Profi': 0.25 // überwiegend S-Kurve, gemischt
 };
+// Doppelspawn-Chance wenn geradlinig
+const DOUBLE_STRAIGHT_PROB = 0.28;
 
-// Speed-Presets: skaliert Ball- & Hazard-Geschwindigkeit
+// Speed-Faktor (skalieren nur Geschwindigkeiten)
 const SPEED_PRESETS = { 'Langsam': 0.85, 'Mittel': 1.0, 'Schnell': 1.25 };
 
 const menu = createMenu(DIFF_LABELS, SPEED_LABELS);
 menu.group.visible = false;
 scene.add(menu.group);
 
-// Ray-Laser von Controllern
+// Ray-Laser von Controllern (zur Menü-Bedienung)
 const raycaster = new THREE.Raycaster();
 const ctrls = [renderer.xr.getController(0), renderer.xr.getController(1)];
-const rayLines = [];
-
 for (let i = 0; i < ctrls.length; i++) {
   const c = ctrls[i];
   scene.add(c);
-  // Sichtbare Linie
   const geom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-1.5)]);
-  const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ transparent:true, opacity:0.8 }));
-  line.name = `ray_${i}`;
+  const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ transparent:true, opacity:0.85 }));
   c.add(line);
-  rayLines.push(line);
-
-  // Klick
   c.addEventListener('selectstart', () => {
     if (!game.menuActive) return;
-    // Ray aus Controller holen
     const origin = new THREE.Vector3();
     const dir = new THREE.Vector3(0,0,-1);
     c.getWorldPosition(origin);
@@ -161,7 +143,7 @@ for (let i = 0; i < ctrls.length; i++) {
   });
 }
 
-// ---------------- Countdown (3..0 in Sicht) ----------------
+// ---------------- Countdown (3..0 sichtbar) ----------------
 let countdown = { active:false, time:0, plane:null, ctx:null, tex:null };
 
 function ensureCountdownPlane() {
@@ -176,6 +158,7 @@ function ensureCountdownPlane() {
   plane.name = 'countdown';
   scene.add(plane);
   countdown = { active:false, time:0, plane, ctx, tex };
+  plane.visible = false;
 }
 
 function drawCountdown(n) {
@@ -192,41 +175,41 @@ function drawCountdown(n) {
 }
 
 function placeCountdown() {
-  const pos = new THREE.Vector3().copy(iPos).addScaledVector(iForward, 1.0).addScaledVector(iUp, 0.0);
+  const pos = new THREE.Vector3().copy(iPos).addScaledVector(iForward, 1.0);
   const look = new THREE.Vector3().copy(pos).sub(iForward);
   countdown.plane.position.copy(pos);
   countdown.plane.lookAt(look);
 }
 
 function beginCountdown() {
-  // Einstellungen übernehmen
+  // Auswahl übernehmen
   const sel = menu.getSelection();
   const diffName = DIFF_LABELS[sel.difficultyIndex];
   const spdName  = SPEED_LABELS[sel.speedIndex];
   applyGamePreset(diffName, spdName);
 
-  // Menü ausblenden, Countdown starten
+  // Runde zurücksetzen
+  hardResetRound();
+
+  // Menü weg, HUD bleibt aus bis Start
   menu.setVisible(false);
   game.menuActive = false;
+
+  // Countdown
   ensureCountdownPlane();
   placeCountdown();
   countdown.active = true;
-  countdown.time = 3.999; // 4 -> 3..2..1..0
+  countdown.time = 3.999;
   drawCountdown(3);
-  hud.set({ note: '' }); // aufräumen
 }
 
-// ---------------- Laufzeit-Presets anwenden ----------------
-const game = {
-  menuActive: true,
-  running: false,
-  paused: false
-};
+// ---------------- Game-State & Presets ----------------
+const game = { menuActive: true, running: false };
 
 const tuning = {
   spawnInterval: SPAWN_INTERVAL,
-  tightProb: 0.45,
-  hazardProb: HAZARD_PROB,
+  straightShare: 1.0,          // Anteil geradlinig (aus Modus)
+  hazardProb: HAZARD_PROB,      // bleibt grundsätzlich gleich
   ballSpeed: BALL_SPEED,
   hazardSpeed: HAZARD_SPEED,
   driftMinAmp: DRIFT_MIN_AMPLITUDE,
@@ -236,26 +219,20 @@ const tuning = {
 };
 
 function applyGamePreset(diffName, speedName) {
-  const d = DIFFICULTY_PRESETS[diffName];
+  tuning.straightShare = DIFFICULTY_DRIFT[diffName] ?? 1.0; // NUR Drift-Anteil
   const sMul = SPEED_PRESETS[speedName] ?? 1.0;
+  tuning.ballSpeed   = BALL_SPEED   * sMul;
+  tuning.hazardSpeed = HAZARD_SPEED * sMul;
 
-  tuning.tightProb     = d.tightProb;
-  tuning.hazardProb    = d.hazardProb;
-  tuning.spawnInterval = SPAWN_INTERVAL * d.spawnIntervalFactor;
+  // Alle anderen Parameter bleiben wie konfiguriert
+  tuning.spawnInterval = SPAWN_INTERVAL;
+  tuning.hazardProb    = HAZARD_PROB;
 
-  tuning.driftMinAmp   = DRIFT_MIN_AMPLITUDE * d.driftAmpFactor;
-  tuning.driftMaxAmp   = DRIFT_MAX_AMPLITUDE * d.driftAmpFactor;
-  tuning.driftMinFreq  = DRIFT_MIN_FREQ * d.driftFreqFactor;
-  tuning.driftMaxFreq  = DRIFT_MAX_FREQ * d.driftFreqFactor;
-
-  tuning.ballSpeed     = BALL_SPEED * sMul;
-  tuning.hazardSpeed   = HAZARD_SPEED * sMul;
-
-  // HUD Hinweis
+  // HUD Hinweis (wird erst nach Start sichtbar)
   hud.set({ note: `${diffName} · ${speedName}` });
 }
 
-// ---------------- Assets & State ----------------
+// ---------------- Assets & Score ----------------
 await loadBall();
 
 const balls   = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot, t, driftAmp, driftOmega, driftPhase, prevLateral }
@@ -292,10 +269,10 @@ function flashSpawnRingAt(pos) {
 // ---------------- Spawner ----------------
 function randRange(a, b) { return a + Math.random() * (b - a); }
 
-function spawnBall(sideSign) {
+function spawnBall(sideSign, { forceStraight = false } = {}) {
   if (!isBallReady() || !poseLocked) return;
 
-  const sideMag = Math.random() < tuning.tightProb ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
+  const sideMag = Math.random() < 0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
   const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
 
   const spawnPos = new THREE.Vector3()
@@ -304,12 +281,14 @@ function spawnBall(sideSign) {
     .addScaledVector(iRight, sideMag * sideSign)
     .addScaledVector(iUp, heightOffset);
 
-  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.ballSpeed);
-
   const obj = makeBall();
   obj.position.copy(spawnPos);
   scene.add(obj);
 
+  // Vorwärtsgeschwindigkeit
+  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.ballSpeed);
+
+  // Rotation (random)
   const spin = Math.random() < 0.5;
   let spinAxis = null, spinSpeed = 0;
   if (spin) {
@@ -319,10 +298,14 @@ function spawnBall(sideSign) {
 
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
-  const driftAmp   = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
-  const driftFreq  = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
-  const driftOmega = 2 * Math.PI * driftFreq;
-  const driftPhase = Math.random() * Math.PI * 2;
+  // Drift (nur wenn nicht erzwungen gerade)
+  let driftAmp = 0, driftOmega = 0, driftPhase = 0;
+  if (!forceStraight) {
+    driftAmp   = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
+    const driftFreq  = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
+    driftOmega = 2 * Math.PI * driftFreq;
+    driftPhase = Math.random() * Math.PI * 2;
+  }
 
   balls.push({
     obj, velocity, alive: true, spin, spinAxis, spinSpeed,
@@ -343,12 +326,11 @@ function spawnHazard(sideSign) {
     .addScaledVector(iRight, sideMag * sideSign)
     .addScaledVector(iUp, heightOffset);
 
-  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.hazardSpeed);
-
   const obj = createHazard();
   obj.position.copy(spawnPos);
   scene.add(obj);
 
+  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.hazardSpeed);
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
   hazards.push({ obj, velocity, alive: true, prevDot });
   return spawnPos.clone();
@@ -402,11 +384,59 @@ function fistsHit(ballPos, fists) {
 function fistsHitHazard(hPos, fists) {
   for (const f of fists) {
     const toHaz = new THREE.Vector3().subVectors(hPos, f.pos);
-    if (toHaz.length() <= (FIST_RADIUS + 0.14) && f.vel.length() >= PUNCH_SPEED && toHaz.dot(f.vel) > 0) {
+    if (toHaz.length() <= (HAZARD_RADIUS + FIST_RADIUS) && f.vel.length() >= PUNCH_SPEED && toHaz.dot(f.vel) > 0) {
       return true;
     }
   }
   return false;
+}
+
+// ---------------- Round Control ----------------
+function hardResetRound() {
+  // Objekte entfernen
+  for (const b of [...balls]) scene.remove(b.obj);
+  for (const h of [...hazards]) scene.remove(h.obj);
+  balls.length = 0; hazards.length = 0;
+
+  // Score/Timer reset
+  hits = 0; misses = 0; score = 0; streak = 0;
+  timeLeft = (gameMode === 'sprint60') ? SPRINT_DURATION : null;
+
+  updateHUD('');
+}
+
+// Overlay im Spiel öffnen (X oder Pinch) → pausiert & beendet Runde
+function openConfigOverlay() {
+  if (game.menuActive) return;
+  game.running = false;
+  hardResetRound();
+  // HUD ausblenden während Overlay
+  hud.plane.visible = false;
+  // Overlay vor dir platzieren & zeigen
+  menu.placeAt(iPos, iForward, iUp);
+  menu.setVisible(true);
+  game.menuActive = true;
+}
+
+// ---------------- Hand-Pinch (als Menü-Shortcut) ----------------
+const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
+let prevPinch = [false, false];
+function detectPinchOpenMenu() {
+  for (let i=0;i<hands.length;i++){
+    const hand = hands[i];
+    if (!hand || !hand.joints) continue;
+    const a = hand.joints['index-finger-tip'];
+    const b = hand.joints['thumb-tip'];
+    if (!a || !b) continue;
+    const pa = a.getWorldPosition(new THREE.Vector3());
+    const pb = b.getWorldPosition(new THREE.Vector3());
+    const d  = pa.distanceTo(pb);
+    const isPinch = d < 0.025; // ~2.5 cm
+    if (isPinch && !prevPinch[i] && !game.menuActive) {
+      openConfigOverlay();
+    }
+    prevPinch[i] = isPinch;
+  }
 }
 
 // ---------------- Game Loop ----------------
@@ -419,12 +449,28 @@ function loop() {
 
   if (renderer.xr.isPresenting && !poseLocked) {
     lockInitialPose();
-    // Vor dem Start: Menü angezeigt, Spiel nicht laufend
-    game.running = false;
-    // Timer setzen erst bei Sprint-Start
-    timeLeft = (gameMode === 'sprint60') ? SPRINT_DURATION : null;
+    // Noch im Overlay – Spiel läuft nicht
     updateHUD('Konfigurieren & Starten');
   }
+
+  // Controller-Buttons: X öffnet Overlay im Spiel
+  const session = renderer.xr.getSession?.();
+  if (session) {
+    if (!loop._btnPrev) loop._btnPrev = {};
+    for (const src of session.inputSources) {
+      const gp = src.gamepad;
+      if (!gp || !gp.buttons) continue;
+      const X = 2; // Button-Index: X
+      const pressed = !!(gp.buttons[X]?.pressed);
+      const key = `${src.handedness}:X`;
+      const prev = !!loop._btnPrev[key];
+      if (pressed && !prev && !game.menuActive) openConfigOverlay();
+      loop._btnPrev[key] = pressed;
+    }
+  }
+
+  // Hand-Pinch als Shortcut
+  detectPinchOpenMenu();
 
   // Ray-Hover (wenn Menü aktiv)
   if (game.menuActive) {
@@ -446,6 +492,8 @@ function loop() {
     if (countdown.time <= 0) {
       countdown.active = false;
       countdown.plane.visible = false;
+      // JETZT Spiel starten + HUD sichtbar
+      hud.plane.visible = true;
       game.running = true;
       updateHUD('');
     } else {
@@ -455,7 +503,7 @@ function loop() {
 
   const fists = fistsMgr.update(dt);
 
-  // Spawner nur wenn Spiel läuft
+  // Timer nur wenn Spiel läuft
   let canSpawn = game.running;
   if (gameMode === 'sprint60' && timeLeft != null && game.running) {
     timeLeft -= dt;
@@ -472,11 +520,22 @@ function loop() {
   if (canSpawn && spawnTimer >= tuning.spawnInterval) {
     spawnTimer = 0;
     const side = sideSwitch; sideSwitch *= -1;
+
+    // Hazard?
     if (HAZARD_ENABLED && Math.random() < tuning.hazardProb) {
       const pos = spawnHazard(side);
       if (pos) flashSpawnRingAt(pos);
     } else {
-      spawnBall(side);
+      // Entscheide geradlinig vs S-Kurve anhand Modus
+      const isStraight = Math.random() < tuning.straightShare;
+
+      if (isStraight && Math.random() < DOUBLE_STRAIGHT_PROB) {
+        // Doppelspawn: gleichzeitig links+rechts
+        spawnBall(-1, { forceStraight: true });
+        spawnBall(+1, { forceStraight: true });
+      } else {
+        spawnBall(side, { forceStraight: isStraight });
+      }
     }
   }
 
@@ -488,7 +547,7 @@ function loop() {
     // Vorwärts
     b.obj.position.addScaledVector(b.velocity, dt);
 
-    // seitlicher Drift
+    // seitlicher Drift (nur wenn gesetzt)
     if (b.driftAmp > 0 && b.driftOmega > 0) {
       b.t += dt;
       const lateral = b.driftAmp * Math.sin(b.driftOmega * b.t + b.driftPhase);
@@ -548,9 +607,10 @@ renderer.xr.addEventListener('sessionend', () => {
   for (const b of balls) scene.remove(b.obj);
   for (const h of hazards) scene.remove(h.obj);
   balls.length = 0; hazards.length = 0;
-  // Menü zurücksetzen
+  // Overlay aus
   menu.setVisible(false);
-  game.menuActive = true; game.running = false;
+  game.menuActive = false;
+  hud.plane.visible = false;
 });
 
 start();
