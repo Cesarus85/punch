@@ -2,13 +2,19 @@ import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARButton.js?module';
 
 import {
+  // Core
   BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT, TIGHT_PROB,
-  BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET,
-  HUD_PLANE_H, SPAWN_BIAS,
+  BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET, SPAWN_BIAS,
+  // Drift
   DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
+  // Feedback
   AUDIO_ENABLED, HAPTICS_ENABLED,
+  // Hazards
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
-  GAME_MODE, SPRINT_DURATION, COMBO_STEP, COMBO_MAX_MULT
+  // Modes
+  GAME_MODE, SPRINT_DURATION, COMBO_STEP, COMBO_MAX_MULT,
+  // Debug/Control
+  FORCE_HAZARD_EVERY_N, DEBUG_HAZARD_RING_MS
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -66,7 +72,7 @@ hud.plane.material.depthTest  = false;
 // ---------- Fäuste ----------
 const fistsMgr = new FistsManager(renderer, scene);
 
-// ---------- Haptics ----------
+// ---------- Haptik ----------
 function rumble(intensity = 0.8, durationMs = 60) {
   if (!HAPTICS_ENABLED) return;
   const session = renderer.xr.getSession?.();
@@ -89,8 +95,9 @@ function rumble(intensity = 0.8, durationMs = 60) {
   }
 }
 
-// ---------- Ball/Hazard State ----------
+// ---------- Ball/Hazard Assets ----------
 await loadBall();
+
 const balls   = []; // { obj, velocity, alive, spin, spinAxis, spinSpeed, prevDot, t, driftAmp, driftOmega, driftPhase, prevLateral }
 const hazards = []; // { obj, velocity, alive, prevDot }
 
@@ -111,9 +118,23 @@ function updateHUD(note = '') {
   hud.set({ hits, misses, score, streak, mode: gameMode, timeLeft, best, note });
 }
 
-// ---------- Spawn ----------
+// ---------- Helpers ----------
 function randRange(a, b) { return a + Math.random() * (b - a); }
 
+// Debug-Ring genau an gegebener Position
+function flashSpawnRingAt(pos) {
+  if (!DEBUG_HAZARD_RING_MS || DEBUG_HAZARD_RING_MS <= 0) return;
+  const ringG = new THREE.TorusGeometry(0.12, 0.012, 8, 24);
+  const ringM = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const ring = new THREE.Mesh(ringG, ringM);
+  ring.position.copy(pos);
+  const lookTarget = new THREE.Vector3().copy(ring.position).sub(iForward);
+  ring.lookAt(lookTarget);
+  scene.add(ring);
+  setTimeout(() => scene.remove(ring), DEBUG_HAZARD_RING_MS);
+}
+
+// ---------- Spawner ----------
 function spawnBall(sideSign) {
   if (!isBallReady() || !poseLocked) return;
 
@@ -132,7 +153,6 @@ function spawnBall(sideSign) {
   obj.position.copy(spawnPos);
   scene.add(obj);
 
-  // zufällige Rotation
   const spin = Math.random() < 0.5;
   let spinAxis = null, spinSpeed = 0;
   if (spin) {
@@ -142,7 +162,6 @@ function spawnBall(sideSign) {
 
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
-  // seitlicher Drift
   const driftAmp   = DRIFT_ENABLED ? randRange(DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE) : 0.0;
   const driftFreq  = DRIFT_ENABLED ? randRange(DRIFT_MIN_FREQ, DRIFT_MAX_FREQ) : 0.0;
   const driftOmega = DRIFT_ENABLED ? (2 * Math.PI * driftFreq) : 0.0;
@@ -156,7 +175,7 @@ function spawnBall(sideSign) {
 }
 
 function spawnHazard(sideSign) {
-  if (!poseLocked) return;
+  if (!poseLocked) return null;
 
   const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
   const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
@@ -176,12 +195,12 @@ function spawnHazard(sideSign) {
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
   hazards.push({ obj, velocity, alive: true, prevDot });
+  return spawnPos.clone(); // für Debug-Ring
 }
 
-// ---------- Hit/Miss/Penalty ----------
+// ---------- Events ----------
 function onBallHit(b) {
   b.alive = false;
-  // Fade out (Materiale sind unique)
   setOpacity(b.obj, 0.25);
   setTimeout(() => { scene.remove(b.obj); }, 60);
 
@@ -247,33 +266,31 @@ function fistsHitHazard(hPos, fists) {
 // ---------- Game Loop ----------
 const clock = new THREE.Clock();
 let spawnTimer = 0;
-let sideSwitch = 1; // +1, -1, +1...
+let sideSwitch = 1;    // +1, -1, +1, ...
+let spawnCount = 0;    // für erzwungene Hazards
 
 function loop() {
   const dt = clock.getDelta();
 
   if (renderer.xr.isPresenting && !poseLocked) {
     lockInitialPose();
-    // Timer initialisieren
     if (gameMode === 'sprint60') {
       timeLeft = SPRINT_DURATION;
-      updateHUD();
     } else {
       timeLeft = null;
-      updateHUD();
     }
+    updateHUD();
   }
 
   const fists = fistsMgr.update(dt); // [{pos, vel}, ...]
 
-  // Timer
+  // Timer & Spawn-Freigabe
   let canSpawn = true;
   if (gameMode === 'sprint60' && timeLeft !== null) {
     timeLeft -= dt;
     if (timeLeft <= 0) {
       timeLeft = 0;
-      canSpawn = false; // keine neuen Spawns
-      // Highscore aktualisieren (einmalig)
+      canSpawn = false;
       if (best !== null && score > best) {
         best = score;
         try { localStorage.setItem(BEST_KEY, String(best)); } catch {}
@@ -284,9 +301,20 @@ function loop() {
   // Spawner
   spawnTimer += dt;
   if (canSpawn && spawnTimer >= SPAWN_INTERVAL) {
-    const side = sideSwitch; sideSwitch *= -1; spawnTimer = 0;
-    if (HAZARD_ENABLED && Math.random() < HAZARD_PROB) spawnHazard(side);
-    else spawnBall(side);
+    spawnTimer = 0;
+    spawnCount++;
+    const side = sideSwitch; sideSwitch *= -1;
+
+    const forceHaz = (typeof FORCE_HAZARD_EVERY_N === 'number'
+                      && FORCE_HAZARD_EVERY_N > 0
+                      && (spawnCount % FORCE_HAZARD_EVERY_N === 0));
+
+    if (HAZARD_ENABLED && (forceHaz || Math.random() < HAZARD_PROB)) {
+      const pos = spawnHazard(side);
+      if (pos) flashSpawnRingAt(pos);
+    } else {
+      spawnBall(side);
+    }
   }
 
   // --- Balls ---
@@ -340,7 +368,7 @@ function loop() {
     if (fistsHitHazard(hPos, fists)) { onHazardHit(h); hazards.splice(i, 1); continue; }
 
     const currDot = new THREE.Vector3().subVectors(h.obj.position, iPos).dot(iForward);
-    // wenn Hazard die Ebene erreicht/überschreitet -> einfach entfernen, keine Strafe/Belohnung
+    // Hazard erreicht/überschreitet Ebene -> neutral entfernen
     if (h.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET) {
       h.alive = false; scene.remove(h.obj); hazards.splice(i, 1); continue;
     }
