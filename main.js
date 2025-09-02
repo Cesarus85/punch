@@ -1,105 +1,52 @@
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
-spinSpeed = THREE.MathUtils.lerp(0.5, 2.0, Math.random());
-}
+import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARButton.js?module';
 
 
-const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
+import {
+BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT, TIGHT_PROB,
+BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET,
+HUD_PLANE_H
+} from './config.js';
 
 
-balls.push({ obj, velocity, alive:true, spin, spinAxis, spinSpeed, prevDot });
-}
+import { createHUD } from './hud.js';
+import { FistsManager } from './fists.js';
+import { loadBall, isBallReady, makeBall, setOpacity } from './ball.js';
 
 
-function hitBall(b){
-b.alive = false;
-setOpacity(b.obj, 0.25);
-setTimeout(()=>{ scene.remove(b.obj); }, 60);
-hits++; hud.set(hits, misses);
-}
+// --- Basis Setup ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera();
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+document.body.appendChild(renderer.domElement);
 
 
-function missBall(b){
-b.alive = false;
-scene.remove(b.obj);
-misses++; hud.set(hits, misses);
-}
+document.body.appendChild(ARButton.createButton(renderer, {
+optionalFeatures: ['local-floor', 'hand-tracking']
+}));
 
 
-// --- Collision ---
-function fistsBallCollision(ballPos, fists){
-for (const f of fists){
-const toBall = new THREE.Vector3().subVectors(ballPos, f.pos);
-const dist = toBall.length();
-if (dist <= (BALL_RADIUS + FIST_RADIUS)){
-if (f.vel.length() >= PUNCH_SPEED && toBall.dot(f.vel) > 0){
-return true;
-}
-}
-}
-return false;
-}
-
-
-// --- Loop ---
-const clock = new THREE.Clock();
-let spawnTimer = 0; let sideSwitch = 1;
-
-
-renderer.setAnimationLoop(()=>{
-const dt = clock.getDelta();
-
-
-if (renderer.xr.isPresenting && !poseLocked){
-lockInitialPose();
-}
-
-
-const fists = fistsMgr.update(dt); // [{pos, vel}, ...]
-
-
-spawnTimer += dt;
-if (spawnTimer >= SPAWN_INTERVAL){
-spawnBall(sideSwitch); sideSwitch *= -1; spawnTimer = 0;
-}
-
-
-for (let i = balls.length-1; i>=0; i--){
-const b = balls[i];
-if (!b.alive){ balls.splice(i,1); continue; }
-
-
-// Bewegung & optional Spin
-b.obj.position.addScaledVector(b.velocity, dt);
-if (b.spin) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
-
-
-// Treffer zuerst prüfen
-const ballPos = b.obj.getWorldPosition(new THREE.Vector3());
-if (fistsBallCollision(ballPos, fists)){
-hitBall(b); balls.splice(i,1); continue;
-}
-
-
-// Miss: Ebene (initiale Körper-Ebene) überschritten?
-const currDot = new THREE.Vector3().subVectors(b.obj.position, iPos).dot(iForward);
-if (b.prevDot > MISS_PLANE_OFFSET && currDot <= MISS_PLANE_OFFSET){
-missBall(b); balls.splice(i,1); continue;
-}
-b.prevDot = currDot;
-
-
-// Safety: weit hinter der Ebene -> entfernen
-if (currDot < -6.0){
-b.alive = false; scene.remove(b.obj); balls.splice(i,1); continue;
-}
-}
-
-
-renderer.render(scene, camera);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+window.addEventListener('resize', ()=>{
+renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 
-renderer.xr.addEventListener('sessionend', ()=>{
-for (const b of balls){ scene.remove(b.obj); }
-balls.length = 0;
+// --- Initial Pose Lock ---
+let poseLocked = false;
+const iPos = new THREE.Vector3();
+const iQuat = new THREE.Quaternion();
+const iForward = new THREE.Vector3();
+const iUp = new THREE.Vector3();
+const iRight = new THREE.Vector3();
+
+
+function lockInitialPose(){
+iPos.setFromMatrixPosition(camera.matrixWorld);
+iQuat.copy(camera.quaternion);
+iForward.set(0,0,-1).applyQuaternion(iQuat).normalize();
 });
