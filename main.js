@@ -18,7 +18,7 @@ const sessionInit = {
 };
 document.body.appendChild(ARButton.createButton(renderer, sessionInit));
 
-// dezentes Licht für sichtbare Meshes
+// Licht
 const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
 scene.add(light);
 
@@ -28,18 +28,26 @@ window.addEventListener('resize', () => {
 }, false);
 
 //
-// --- Gemeinsame Ressourcen ---
+// --- Tuning-Parameter ---
 const BALL_RADIUS = 0.12;
 const FIST_RADIUS = 0.11;
 const SPAWN_DISTANCE = 2.5;         // m vor dem Player
 const SIDE_OFFSET = 0.5;            // m links/rechts
-const HEIGHT_VARIATION = 0.25;      // m
 const BALL_SPEED = 1.6;             // m/s
 const SPAWN_INTERVAL = 0.65;        // s zwischen Spawns
 const IMPACT_RADIUS = 0.35;         // m -> Miss, wenn Ball so nahe kommt
 const PUNCH_SPEED = 0.6;            // m/s Mindestgeschwindigkeit der Faust
 
-// geteilte Geometrie/Materialien
+// Spawn-Höhenbegrenzung (NEU): nie über Headset, bis zu 0.70 m darunter
+const SPAWN_MAX_BELOW = 0.70;       // m
+
+// Scoreboard-Positionierung (NEU): fest am Boden, leicht nach oben geneigt
+const HUD_FORWARD = 1.0;            // m vor Startposition
+const HUD_HEIGHT  = 0.85;           // m über Boden
+const HUD_TILT_DEG = 20;            // Grad Neigung nach oben
+
+//
+// --- Gemeinsame Ressourcen ---
 const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 16, 12);
 const ballMat = new THREE.MeshStandardMaterial({ color: 0x2aa1ff, metalness: 0.1, roughness: 0.6, transparent: true });
 
@@ -97,9 +105,32 @@ hudTex.minFilter = THREE.LinearFilter;
 drawHUD();
 
 const hudMat = new THREE.MeshBasicMaterial({ map: hudTex, transparent: true, side: THREE.DoubleSide });
-const hudPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.21), hudMat);
+const hudPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.50, 0.25), hudMat);
 hudPlane.name = 'scoreboard';
 scene.add(hudPlane);
+
+// NEU: feste Platzierung am Boden bei Sessionstart / erstem Frame
+let hudPlaced = false;
+renderer.xr.addEventListener('sessionstart', () => { hudPlaced = false; });
+
+function placeHUDOnFloor() {
+  // Kamera-Pose lesen
+  const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+  const camQuat = new THREE.Quaternion().copy(camera.quaternion);
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat).normalize();
+
+  // Position: ein Stück vor dir, feste Höhe über Boden
+  hudPlane.position.set(
+    camPos.x + forward.x * HUD_FORWARD,
+    HUD_HEIGHT,
+    camPos.z + forward.z * HUD_FORWARD
+  );
+
+  // Auf dich ausrichten (Yaw aus lookAt), danach leicht nach oben neigen
+  const lookTarget = new THREE.Vector3(camPos.x, HUD_HEIGHT + 0.6, camPos.z); // in etwa Blickhöhe
+  hudPlane.lookAt(lookTarget);
+  hudPlane.rotateX(THREE.MathUtils.degToRad(-HUD_TILT_DEG)); // nach oben geneigt
+}
 
 //
 // --- Ball Pool/Logik ---
@@ -128,7 +159,8 @@ function spawnBall(sideSign /* -1 links, +1 rechts */) {
   const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camWorldQuat).normalize();
   const right = new THREE.Vector3().crossVectors(forward, up).normalize();
 
-  const heightOffset = (Math.random()*2 - 1) * HEIGHT_VARIATION;
+  // NEU: Höhe max. Headset (0), min. bis 0.70 m darunter (negativ)
+  const heightOffset = -Math.random() * SPAWN_MAX_BELOW; // [0, -0.70]
 
   const spawnPos = new THREE.Vector3()
     .copy(camWorldPos)
@@ -201,25 +233,18 @@ function fistsBallCollision(ball) {
   return false;
 }
 
-function updateHUDPose() {
-  // Scoreboard rechts neben dem Spieler, leicht vorne/oben, auf Kamera blickend
-  const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
-  const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-
-  hudPlane.position.copy(camPos)
-    .addScaledVector(right, 0.6)
-    .addScaledVector(forward, 0.5)
-    .addScaledVector(up, 0.10);
-  hudPlane.quaternion.copy(camera.quaternion); // immer zum Spieler ausgerichtet
-}
+// Entfernt: HUD folgt nicht mehr dem Kopf – keine updateHUDPose()
 
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
 
+  // Einmalige Platzierung des HUD am Boden nach Sessionstart
+  if (!hudPlaced && renderer.xr.isPresenting) {
+    placeHUDOnFloor();
+    hudPlaced = true;
+  }
+
   updateFists(dt);
-  updateHUDPose();
 
   // Spawner
   spawnTimer += dt;
@@ -265,9 +290,8 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 
-// Session-Cleanup (optional)
+// Session-Cleanup
 renderer.xr.addEventListener('sessionend', () => {
-  // alles in Pool zurück
   for (const b of balls) releaseBallMesh(b.mesh);
   balls.length = 0;
 });
