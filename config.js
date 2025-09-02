@@ -11,7 +11,6 @@ export const PUNCH_SPEED = 0.6;         // m/s Mindestgeschwindigkeit der Faust
 export const SPAWN_MAX_BELOW = 0.70;    // m (max. 70 cm unter Headset)
 export const MISS_PLANE_OFFSET = 0.02;  // m vor der initialen Ebene
 export const SPAWN_BIAS = 0.20;         // m (20 cm näher zu dir, reduziert Wand-Occlusion)
-export const BALL_URL = './assets/ball.glb';
 
 // --- HUD ---
 export const HUD_FORWARD = 1.0;         // m vor initialer Position
@@ -19,6 +18,9 @@ export const HUD_RIGHT = 0.10;          // m nach rechts (10 cm)
 export const HUD_TILT_DEG = 20;         // Grad Neigung nach oben
 export const HUD_PLANE_W = 0.50;
 export const HUD_PLANE_H = 0.25;        // Unterkante auf Boden (Center = H/2)
+
+// --- Assets ---
+export const BALL_URL = './assets/ball.glb';
 
 // --- Drift (Step 3) ---
 export const DRIFT_ENABLED = true;
@@ -33,14 +35,19 @@ export const HAPTICS_ENABLED = true;
 
 // --- Hazards (Step 4) ---
 export const HAZARD_ENABLED = true;
-export const HAZARD_PROB = 0.25;          // Wahrscheinlichkeit, dass statt Ball ein Hazard spawnt
-export const HAZARD_RADIUS = 0.14;        // physikalischer Radius
-export const HAZARD_SPEED = BALL_SPEED;   // m/s
-export const HAZARD_PENALTY = 2;          // Punktabzug bei Berührung
-export const HAZARD_COLOR = 0xff4242;     // rot
+export const HAZARD_PROB = 0.50;              // gern wieder auf 0.25 setzen
+export const FORCE_HAZARD_EVERY_N = 3;        // 0 = aus; z.B. jeder 3. Spawn garantiert Hazard
+export const HAZARD_RADIUS = 0.14;
+export const HAZARD_SPEED = BALL_SPEED;
+export const HAZARD_PENALTY = 2;
+export const HAZARD_COLOR = 0xff4242;
+export const HAZARD_EMISSIVE_INTENSITY = 0.9; // damit Hazards „leuchten“ und immer sichtbar sind
 
-// --- Game Modes (Step 4) ---
-export const GAME_MODE = 'endless';       // 'endless' | 'sprint60'
-export const SPRINT_DURATION = 60;        // Sekunden
-export const COMBO_STEP = 5;              // alle 5 Treffer +1 Multiplier
-export const COMBO_MAX_MULT = 5;          // max. x5
+// --- Debug ---
+export const DEBUG_HAZARD_RING_MS = 500;      // 0 = aus; kurzer Ring-Flash am Hazard-Spawn
+
+// --- Game Modes ---
+export const GAME_MODE = 'endless';           // 'endless' | 'sprint60'
+export const SPRINT_DURATION = 60;            // Sekunden
+export const COMBO_STEP = 5;                  // alle 5 Treffer +1 Multiplikator
+export const COMBO_MAX_MULT = 5;              // max. x5
