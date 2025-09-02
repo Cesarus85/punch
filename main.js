@@ -30,23 +30,50 @@ window.addEventListener('resize', () => {
 // --- Tuning-Parameter ---
 const BALL_RADIUS = 0.12;
 const FIST_RADIUS = 0.11;
-const SPAWN_DISTANCE = 2.5;     // m vor dem Player
+const SPAWN_DISTANCE = 2.5;     // m vor initialer Blickrichtung
 const SIDE_OFFSET = 0.5;        // m links/rechts
 const BALL_SPEED = 1.6;         // m/s
 const SPAWN_INTERVAL = 0.65;    // s zwischen Spawns
 const IMPACT_RADIUS = 0.35;     // m -> Miss, wenn Ball so nahe kommt
 const PUNCH_SPEED = 0.6;        // m/s Mindestgeschwindigkeit der Faust
 
-// Spawn-Höhenbegrenzung: nie über Headset, bis zu 0.70 m darunter
+// Spawn-Höhenbegrenzung: nie über Headset, bis zu 0.70 m darunter (relativ zur INITIALEN Up-Achse)
 const SPAWN_MAX_BELOW = 0.70;   // m
 
-// Scoreboard-Positionierung (fest am Boden, leicht nach oben geneigt)
-const HUD_FORWARD = 1.0;        // m vor Startposition
-const HUD_HEIGHT  = 0.85;       // m über Boden
+// Scoreboard-Positionierung (am Boden, leicht nach oben geneigt)
+const HUD_FORWARD = 1.0;        // m vor initialer Position
 const HUD_TILT_DEG = 20;        // Grad Neigung nach oben
+const HUD_PLANE_W = 0.50;
+const HUD_PLANE_H = 0.25;       // Unterkante steht auf y=0, daher liegt Center bei HUD_PLANE_H/2
 
 // GLB-Ball
 const BALL_URL = './assets/ball.glb'; // ggf. anpassen
+
+//
+// --- „Initial Pose Lock“ ---
+let poseLocked = false;
+let iPos = new THREE.Vector3();       // initiale Position (Kopf)
+let iQuat = new THREE.Quaternion();   // initiale Orientierung
+let iForward = new THREE.Vector3();   // vorwärts (aus iQuat)
+let iUp = new THREE.Vector3();        // oben (aus iQuat)
+let iRight = new THREE.Vector3();     // rechts (iForward x iUp)
+
+function lockInitialPose() {
+  iPos.setFromMatrixPosition(camera.matrixWorld);
+  iQuat.copy(camera.quaternion);
+
+  iForward.set(0, 0, -1).applyQuaternion(iQuat).normalize();
+  iUp.set(0, 1, 0).applyQuaternion(iQuat).normalize();
+  iRight.crossVectors(iForward, iUp).normalize();
+
+  poseLocked = true;
+  // Scoreboard platzieren, sobald wir die Pose kennen
+  placeHUDOnFloorInitial();
+}
+
+renderer.xr.addEventListener('sessionstart', () => {
+  poseLocked = false;
+});
 
 //
 // --- Ressourcen für Fäuste ---
@@ -100,26 +127,29 @@ hudTex.minFilter = THREE.LinearFilter;
 drawHUD();
 
 const hudMat = new THREE.MeshBasicMaterial({ map: hudTex, transparent: true, side: THREE.DoubleSide });
-const hudPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.50, 0.25), hudMat);
+const hudPlane = new THREE.Mesh(new THREE.PlaneGeometry(HUD_PLANE_W, HUD_PLANE_H), hudMat);
 hudPlane.name = 'scoreboard';
 scene.add(hudPlane);
 
-// Feste Platzierung des HUD am Boden nach Sessionstart / erstem Frame
-let hudPlaced = false;
-renderer.xr.addEventListener('sessionstart', () => { hudPlaced = false; });
-function placeHUDOnFloor() {
-  const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-  const camQuat = new THREE.Quaternion().copy(camera.quaternion);
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat).normalize();
+// Boden-Platzierung relativ zur INITIALEN Pose
+function placeHUDOnFloorInitial() {
+  if (!poseLocked) return;
 
+  // Unterkante auf Boden (y ~ 0) -> Center auf HUD_PLANE_H/2
+  const y = HUD_PLANE_H / 2 + 0.02; // 2cm über Boden
+
+  // Position: ein Stück vor der initialen Position, entlang initialer Vorwärtsrichtung
   hudPlane.position.set(
-    camPos.x + forward.x * HUD_FORWARD,
-    HUD_HEIGHT,
-    camPos.z + forward.z * HUD_FORWARD
+    iPos.x + iForward.x * HUD_FORWARD,
+    y,
+    iPos.z + iForward.z * HUD_FORWARD
   );
-  const lookTarget = new THREE.Vector3(camPos.x, HUD_HEIGHT + 0.6, camPos.z);
+
+  // Orientierung: zum Spieler (entlang -iForward) blicken, dann leicht nach oben neigen
+  const lookTarget = new THREE.Vector3().copy(hudPlane.position).sub(iForward);
   hudPlane.lookAt(lookTarget);
-  hudPlane.rotateX(THREE.MathUtils.degToRad(-HUD_TILT_DEG));
+  // leichte Neigung nach oben (Top weg vom Spieler)
+  hudPlane.rotateX(THREE.MathUtils.degToRad(HUD_TILT_DEG));
 }
 
 //
@@ -134,6 +164,7 @@ loader.load(
   BALL_URL,
   (gltf) => {
     ballPrefab = gltf.scene;
+
     // Bounding-Box für automatische Skalierung
     const box = new THREE.Box3().setFromObject(ballPrefab);
     const size = new THREE.Vector3();
@@ -141,7 +172,7 @@ loader.load(
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     ballScaleFactor = (2 * BALL_RADIUS) / maxDim;
 
-    // Sicherheit: Materialien transparent erlauben (für Fade-Out)
+    // Materialien transparent erlauben (für Fade-Out)
     ballPrefab.traverse((n) => {
       if (n.isMesh && n.material) {
         if (Array.isArray(n.material)) {
@@ -177,9 +208,7 @@ const pool = [];  // recycelte Object3D-Instanzen
 
 function getBallObject() {
   let obj = pool.pop();
-  if (!obj) {
-    obj = ballPrefab.clone(true);
-  }
+  if (!obj) obj = ballPrefab.clone(true);
   obj.visible = true;
   obj.scale.setScalar(ballScaleFactor);
   setObjectOpacity(obj, 1.0);
@@ -193,27 +222,19 @@ function releaseBallObject(obj) {
 }
 
 function spawnBall(sideSign /* -1 links, +1 rechts */) {
-  if (!ballPrefabReady) return; // erst spawnen, wenn Modell geladen
+  if (!ballPrefabReady || !poseLocked) return;
 
-  // aktuelle Kopf-/Kameraorientierung
-  const camWorldPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-  const camWorldQuat = new THREE.Quaternion().copy(camera.quaternion);
-
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camWorldQuat).normalize();
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camWorldQuat).normalize();
-  const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-
-  // Höhe max. Headset (0), min. bis 0.70 m darunter (negativ)
+  // Höhe max. Headset (0), min. bis 0.70 m darunter (negativ) — alles relativ zur INITIALEN Up-Achse
   const heightOffset = -Math.random() * SPAWN_MAX_BELOW; // [0, -0.70]
 
   const spawnPos = new THREE.Vector3()
-    .copy(camWorldPos)
-    .addScaledVector(forward, SPAWN_DISTANCE)
-    .addScaledVector(right, SIDE_OFFSET * sideSign)
-    .addScaledVector(up, heightOffset);
+    .copy(iPos)
+    .addScaledVector(iForward, SPAWN_DISTANCE)
+    .addScaledVector(iRight, SIDE_OFFSET * sideSign)
+    .addScaledVector(iUp, heightOffset);
 
-  const dirToCam = new THREE.Vector3().subVectors(camWorldPos, spawnPos).normalize();
-  const velocity = dirToCam.multiplyScalar(BALL_SPEED);
+  // Flugrichtung: konstant auf den Spieler zu (entlang -initialForward), NICHT zur aktuellen Kopfposition „homing“
+  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-BALL_SPEED);
 
   const obj = getBallObject();
   obj.position.copy(spawnPos);
@@ -289,10 +310,10 @@ function fistsBallCollision(ball) {
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
 
-  // Einmalige Platzierung des HUD am Boden nach Sessionstart
-  if (!hudPlaced && renderer.xr.isPresenting) {
-    placeHUDOnFloor();
-    hudPlaced = true;
+  // Einmalig: initiale Pose kurz nach Start festhalten
+  if (renderer.xr.isPresenting && !poseLocked) {
+    // eine Frame-Latenz abwarten, damit camera.matrixWorld valide ist
+    lockInitialPose();
   }
 
   updateFists(dt);
@@ -312,13 +333,11 @@ renderer.setAnimationLoop(() => {
     const b = balls[i];
     if (!b.alive) { balls.splice(i,1); continue; }
 
-    // Translation
+    // Translation (konstante Richtung)
     b.obj.position.addScaledVector(b.velocity, dt);
 
     // Optional: Rotation
-    if (b.spin) {
-      b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
-    }
+    if (b.spin) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
 
     // Miss, wenn Ball nahe an Kopf vorbeikommt
     const distToHead = b.obj.position.distanceTo(camPos);
