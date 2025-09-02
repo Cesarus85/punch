@@ -1,5 +1,6 @@
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARButton.js';
+import { GLTFLoader } from 'https://unpkg.com/three@0.166.1/examples/jsm/loaders/GLTFLoader.js';
 
 //
 // --- Basis Setup ---
@@ -13,9 +14,7 @@ renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
 
-const sessionInit = {
-  optionalFeatures: ['local-floor', 'hand-tracking']
-};
+const sessionInit = { optionalFeatures: ['local-floor', 'hand-tracking'] };
 document.body.appendChild(ARButton.createButton(renderer, sessionInit));
 
 // Licht
@@ -31,33 +30,31 @@ window.addEventListener('resize', () => {
 // --- Tuning-Parameter ---
 const BALL_RADIUS = 0.12;
 const FIST_RADIUS = 0.11;
-const SPAWN_DISTANCE = 2.5;         // m vor dem Player
-const SIDE_OFFSET = 0.5;            // m links/rechts
-const BALL_SPEED = 1.6;             // m/s
-const SPAWN_INTERVAL = 0.65;        // s zwischen Spawns
-const IMPACT_RADIUS = 0.35;         // m -> Miss, wenn Ball so nahe kommt
-const PUNCH_SPEED = 0.6;            // m/s Mindestgeschwindigkeit der Faust
+const SPAWN_DISTANCE = 2.5;     // m vor dem Player
+const SIDE_OFFSET = 0.5;        // m links/rechts
+const BALL_SPEED = 1.6;         // m/s
+const SPAWN_INTERVAL = 0.65;    // s zwischen Spawns
+const IMPACT_RADIUS = 0.35;     // m -> Miss, wenn Ball so nahe kommt
+const PUNCH_SPEED = 0.6;        // m/s Mindestgeschwindigkeit der Faust
 
-// Spawn-Höhenbegrenzung (NEU): nie über Headset, bis zu 0.70 m darunter
-const SPAWN_MAX_BELOW = 0.70;       // m
+// Spawn-Höhenbegrenzung: nie über Headset, bis zu 0.70 m darunter
+const SPAWN_MAX_BELOW = 0.70;   // m
 
-// Scoreboard-Positionierung (NEU): fest am Boden, leicht nach oben geneigt
-const HUD_FORWARD = 1.0;            // m vor Startposition
-const HUD_HEIGHT  = 0.85;           // m über Boden
-const HUD_TILT_DEG = 20;            // Grad Neigung nach oben
+// Scoreboard-Positionierung (fest am Boden, leicht nach oben geneigt)
+const HUD_FORWARD = 1.0;        // m vor Startposition
+const HUD_HEIGHT  = 0.85;       // m über Boden
+const HUD_TILT_DEG = 20;        // Grad Neigung nach oben
+
+// GLB-Ball
+const BALL_URL = './assets/ball.glb'; // ggf. anpassen
 
 //
-// --- Gemeinsame Ressourcen ---
-const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 16, 12);
-const ballMat = new THREE.MeshStandardMaterial({ color: 0x2aa1ff, metalness: 0.1, roughness: 0.6, transparent: true });
-
+// --- Ressourcen für Fäuste ---
 const fistGeo = new THREE.SphereGeometry(FIST_RADIUS, 16, 12);
 const fistMat = new THREE.MeshStandardMaterial({ color: 0xffc043, metalness: 0.2, roughness: 0.7 });
 
-//
-// --- „Fäuste“ (Controller) ---
 const controllers = [];
-const fists = [];            // { mesh, ctrl, prevPos: Vector3, velocity: Vector3 }
+const fists = []; // { mesh, ctrl, prevPos: Vector3, velocity: Vector3 }
 
 function addController(i) {
   const ctrl = renderer.xr.getControllerGrip(i);
@@ -76,7 +73,6 @@ function addController(i) {
 
   controllers.push(ctrl);
 }
-
 addController(0);
 addController(1);
 
@@ -99,7 +95,6 @@ function drawHUD() {
   hudCtx.fillText(`Misses: ${misses}`, 30, 200);
   hudTex.needsUpdate = true;
 }
-
 const hudTex = new THREE.CanvasTexture(hudCanvas);
 hudTex.minFilter = THREE.LinearFilter;
 drawHUD();
@@ -109,48 +104,97 @@ const hudPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.50, 0.25), hudMat);
 hudPlane.name = 'scoreboard';
 scene.add(hudPlane);
 
-// NEU: feste Platzierung am Boden bei Sessionstart / erstem Frame
+// Feste Platzierung des HUD am Boden nach Sessionstart / erstem Frame
 let hudPlaced = false;
 renderer.xr.addEventListener('sessionstart', () => { hudPlaced = false; });
-
 function placeHUDOnFloor() {
-  // Kamera-Pose lesen
   const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
   const camQuat = new THREE.Quaternion().copy(camera.quaternion);
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat).normalize();
 
-  // Position: ein Stück vor dir, feste Höhe über Boden
   hudPlane.position.set(
     camPos.x + forward.x * HUD_FORWARD,
     HUD_HEIGHT,
     camPos.z + forward.z * HUD_FORWARD
   );
-
-  // Auf dich ausrichten (Yaw aus lookAt), danach leicht nach oben neigen
-  const lookTarget = new THREE.Vector3(camPos.x, HUD_HEIGHT + 0.6, camPos.z); // in etwa Blickhöhe
+  const lookTarget = new THREE.Vector3(camPos.x, HUD_HEIGHT + 0.6, camPos.z);
   hudPlane.lookAt(lookTarget);
-  hudPlane.rotateX(THREE.MathUtils.degToRad(-HUD_TILT_DEG)); // nach oben geneigt
+  hudPlane.rotateX(THREE.MathUtils.degToRad(-HUD_TILT_DEG));
 }
 
 //
-// --- Ball Pool/Logik ---
-const balls = [];     // aktive
-const pool = [];      // recycelte meshes
+// --- GLB Ball laden & skalieren ---
+const loader = new GLTFLoader();
 
-function getBallMesh() {
-  const mesh = pool.pop() || new THREE.Mesh(ballGeo, ballMat.clone());
-  mesh.visible = true;
-  mesh.material.opacity = 1.0;
-  return mesh;
+let ballPrefab = null;
+let ballPrefabReady = false;
+let ballScaleFactor = 1;
+
+loader.load(
+  BALL_URL,
+  (gltf) => {
+    ballPrefab = gltf.scene;
+    // Bounding-Box für automatische Skalierung
+    const box = new THREE.Box3().setFromObject(ballPrefab);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    ballScaleFactor = (2 * BALL_RADIUS) / maxDim;
+
+    // Sicherheit: Materialien transparent erlauben (für Fade-Out)
+    ballPrefab.traverse((n) => {
+      if (n.isMesh && n.material) {
+        if (Array.isArray(n.material)) {
+          n.material.forEach(m => { m.transparent = true; });
+        } else {
+          n.material.transparent = true;
+        }
+      }
+    });
+
+    ballPrefabReady = true;
+    console.log('[AR Punch] ball.glb geladen. ScaleFactor =', ballScaleFactor.toFixed(3));
+  },
+  undefined,
+  (err) => {
+    console.error('Fehler beim Laden von ball.glb:', err);
+  }
+);
+
+function setObjectOpacity(obj, opacity) {
+  obj.traverse((n) => {
+    if (n.isMesh && n.material) {
+      if (Array.isArray(n.material)) n.material.forEach(m => { m.opacity = opacity; });
+      else n.material.opacity = opacity;
+    }
+  });
 }
 
-function releaseBallMesh(mesh) {
-  mesh.visible = false;
-  mesh.parent && mesh.parent.remove(mesh);
-  pool.push(mesh);
+//
+// --- Ball Pool/Logik (GLB-Objekte) ---
+const balls = []; // aktive: { obj, velocity, alive, spin, spinAxis, spinSpeed }
+const pool = [];  // recycelte Object3D-Instanzen
+
+function getBallObject() {
+  let obj = pool.pop();
+  if (!obj) {
+    obj = ballPrefab.clone(true);
+  }
+  obj.visible = true;
+  obj.scale.setScalar(ballScaleFactor);
+  setObjectOpacity(obj, 1.0);
+  return obj;
+}
+
+function releaseBallObject(obj) {
+  obj.visible = false;
+  obj.parent && obj.parent.remove(obj);
+  pool.push(obj);
 }
 
 function spawnBall(sideSign /* -1 links, +1 rechts */) {
+  if (!ballPrefabReady) return; // erst spawnen, wenn Modell geladen
+
   // aktuelle Kopf-/Kameraorientierung
   const camWorldPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
   const camWorldQuat = new THREE.Quaternion().copy(camera.quaternion);
@@ -159,7 +203,7 @@ function spawnBall(sideSign /* -1 links, +1 rechts */) {
   const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camWorldQuat).normalize();
   const right = new THREE.Vector3().crossVectors(forward, up).normalize();
 
-  // NEU: Höhe max. Headset (0), min. bis 0.70 m darunter (negativ)
+  // Höhe max. Headset (0), min. bis 0.70 m darunter (negativ)
   const heightOffset = -Math.random() * SPAWN_MAX_BELOW; // [0, -0.70]
 
   const spawnPos = new THREE.Vector3()
@@ -171,30 +215,39 @@ function spawnBall(sideSign /* -1 links, +1 rechts */) {
   const dirToCam = new THREE.Vector3().subVectors(camWorldPos, spawnPos).normalize();
   const velocity = dirToCam.multiplyScalar(BALL_SPEED);
 
-  const mesh = getBallMesh();
-  mesh.position.copy(spawnPos);
-  scene.add(mesh);
+  const obj = getBallObject();
+  obj.position.copy(spawnPos);
+  scene.add(obj);
+
+  // Zufallsrotation: mal ja, mal nein
+  const spin = Math.random() < 0.5;
+  let spinAxis = null, spinSpeed = 0;
+  if (spin) {
+    spinAxis = new THREE.Vector3(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1).normalize();
+    spinSpeed = THREE.MathUtils.lerp(0.5, 2.0, Math.random()); // rad/s
+  }
 
   balls.push({
-    mesh,
+    obj,
     velocity,
-    alive: true
+    alive: true,
+    spin,
+    spinAxis,
+    spinSpeed
   });
 }
 
 function hitBall(ball) {
   ball.alive = false;
-  // kleiner „Auflösen“-Effekt (Fade)
-  const mat = ball.mesh.material;
-  mat.opacity = 0.25;
-  setTimeout(() => releaseBallMesh(ball.mesh), 60);
+  setObjectOpacity(ball.obj, 0.25);         // kurzer „Auflösen“-Effekt
+  setTimeout(() => releaseBallObject(ball.obj), 60);
   hits++;
   drawHUD();
 }
 
 function missBall(ball) {
   ball.alive = false;
-  releaseBallMesh(ball.mesh);
+  releaseBallObject(ball.obj);
   misses++;
   drawHUD();
 }
@@ -218,7 +271,7 @@ function updateFists(dt) {
 
 function fistsBallCollision(ball) {
   // Treffer nur wenn Faust ausreichend schnell und in Richtung Ball
-  const ballPos = ball.mesh.getWorldPosition(new THREE.Vector3());
+  const ballPos = ball.obj.getWorldPosition(new THREE.Vector3());
   for (const f of fists) {
     const fistPos = f.mesh.getWorldPosition(new THREE.Vector3());
     const toBall = new THREE.Vector3().subVectors(ballPos, fistPos);
@@ -232,8 +285,6 @@ function fistsBallCollision(ball) {
   }
   return false;
 }
-
-// Entfernt: HUD folgt nicht mehr dem Kopf – keine updateHUDPose()
 
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
@@ -254,17 +305,23 @@ renderer.setAnimationLoop(() => {
     spawnTimer = 0;
   }
 
-  // Bälle bewegen und prüfen
+  // Bälle bewegen, drehen und prüfen
   const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
 
   for (let i = balls.length - 1; i >= 0; i--) {
     const b = balls[i];
     if (!b.alive) { balls.splice(i,1); continue; }
 
-    b.mesh.position.addScaledVector(b.velocity, dt);
+    // Translation
+    b.obj.position.addScaledVector(b.velocity, dt);
+
+    // Optional: Rotation
+    if (b.spin) {
+      b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed * dt);
+    }
 
     // Miss, wenn Ball nahe an Kopf vorbeikommt
-    const distToHead = b.mesh.position.distanceTo(camPos);
+    const distToHead = b.obj.position.distanceTo(camPos);
     if (distToHead <= IMPACT_RADIUS) {
       missBall(b);
       balls.splice(i,1);
@@ -281,7 +338,7 @@ renderer.setAnimationLoop(() => {
     // Safety: weit hinter Spieler -> weg
     if (distToHead > 6.0) {
       b.alive = false;
-      releaseBallMesh(b.mesh);
+      releaseBallObject(b.obj);
       balls.splice(i,1);
       continue;
     }
@@ -292,6 +349,6 @@ renderer.setAnimationLoop(() => {
 
 // Session-Cleanup
 renderer.xr.addEventListener('sessionend', () => {
-  for (const b of balls) releaseBallMesh(b.mesh);
+  for (const b of balls) releaseBallObject(b.obj);
   balls.length = 0;
 });
