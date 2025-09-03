@@ -232,7 +232,7 @@ const DDA_CFG = {
   straightMin: 0.15,
   straightMax: 1.00,
   hazMin: 0.05,
-  hazMax: 0.40,
+  hazMax: 0.55,          // erhöht
   goodAcc: 0.90,
   badAcc:  0.70,
   minEvents: 8
@@ -259,7 +259,10 @@ function applyGamePreset(diffName, speedName, timeLabel){
   const sMul = SPEED_PRESETS[speedName] ?? 1.0;
   tuning.ballSpeed   = BALL_SPEED   * sMul;
   tuning.hazardSpeed = HAZARD_SPEED * sMul;
-  tuning.hazardProb  = baseHazardProb;
+
+  // Startwert Hazards je Schwierigkeit etwas boosten
+  const diffBoost = diffName==='Profi' ? 1.25 : (diffName==='Aufsteiger' ? 1.10 : 1.00);
+  tuning.hazardProb  = clamp(baseHazardProb * diffBoost, DDA_CFG.hazMin, DDA_CFG.hazMax);
 
   if (timeLabel==='Endlos'){ gameMode='endless'; timeLeft=null; }
   else if (timeLabel==='1:00'){ gameMode='time60'; timeLeft=60; }
@@ -330,13 +333,14 @@ function recycleHazard(mesh){
 }
 
 /* =========================================================
-   Spawn-Koordinator (NEU): Mindestabstände & zeitliche Entkopplung
+   Spawn-Koordinator (Mindestabstände & zeitliche Entkopplung)
 ========================================================= */
-// Mindestabstand in Metern zwischen neuem Spawn und „reservierten“ Positionen
-const MIN_SPAWN_SEP = BALL_RADIUS + HAZARD_RADIUS + 0.12; // ~12 cm Puffer zusätzlich
-const RECENT_SPAWN_TTL = 1.0;     // wie lange Reservierungen gelten (Sekunden)
-const HAZARD_SPAWN_DELAY = 0.18;  // Hazards leicht später als Balls
-const HAZARD_MIN_GAP = 0.25;      // min. Zeitabstand zu irgendeinem letzten Spawn
+// gelockerte Werte für höhere Hazard-Rate
+const MIN_SPAWN_SEP = BALL_RADIUS + HAZARD_RADIUS + 0.08; // ~8 cm Puffer
+const RECENT_SPAWN_TTL = 0.70;     // Reservierungen verfallen schneller
+const HAZARD_SPAWN_DELAY = 0.12;   // Hazards schneller nachschieben
+const HAZARD_MIN_GAP = 0.14;       // kleiner Mindestzeitabstand
+const MAX_HAZARDS_PER_TICK = 2;    // mehrere aus Queue pro Frame möglich
 
 let nowTime = 0;
 let lastAnySpawnTime = -999;
@@ -360,7 +364,6 @@ function resolveNonOverlappingPos(candidate){
       const d = out.distanceTo(e.pos);
       if (d < MIN_SPAWN_SEP){
         hit = true;
-        // 1) seitlich schieben, 2) optional minimal vertikal variieren
         const pushRight = (Math.random()<0.5 ? -1 : +1);
         out.addScaledVector(iRight, pushRight * (MIN_SPAWN_SEP - d + 0.02));
         if (attempt===1){
@@ -792,11 +795,11 @@ function loop(){
         if (acc >= DDA_CFG.goodAcc && dHaz <= 1){
           tuning.spawnInterval = clamp(tuning.spawnInterval * 0.92, baseSpawnInterval*DDA_CFG.spawnMinMul, baseSpawnInterval*DDA_CFG.spawnMaxMul);
           tuning.straightShare = clamp(tuning.straightShare * 0.92, DDA_CFG.straightMin, DDA_CFG.straightMax);
-          tuning.hazardProb    = clamp(tuning.hazardProb + 0.02, DDA_CFG.hazMin, DDA_CFG.hazMax);
+          tuning.hazardProb    = clamp(tuning.hazardProb + 0.03, DDA_CFG.hazMin, DDA_CFG.hazMax); // schneller anheben
         } else if (acc <= DDA_CFG.badAcc || dHaz >= 2){
           tuning.spawnInterval = clamp(tuning.spawnInterval * 1.08, baseSpawnInterval*DDA_CFG.spawnMinMul, baseSpawnInterval*DDA_CFG.spawnMaxMul);
           tuning.straightShare = clamp(tuning.straightShare * 1.06, DDA_CFG.straightMin, DDA_CFG.straightMax);
-          tuning.hazardProb    = clamp(tuning.hazardProb - 0.02, DDA_CFG.hazMin, DDA_CFG.hazMax);
+          tuning.hazardProb    = clamp(tuning.hazardProb - 0.03, DDA_CFG.hazMin, DDA_CFG.hazMax); // deutlicher absenken
         }
       }
       lastDdaHits = hits; lastDdaMisses = misses; lastDdaHazHits = hazardHits; ddaTimer = 0;
@@ -805,18 +808,24 @@ function loop(){
 
   /* ---------- Hazard-Queue abarbeiten (vor regulärem Spawner) ---------- */
   if (canSpawn && hazardQueue.length && (balls.length + hazards.length) < MAX_ACTIVE_BODIES){
-    const head = hazardQueue[0];
-    if (head.dueTime <= nowTime){
+    let processed = 0;
+    while (processed < MAX_HAZARDS_PER_TICK &&
+           hazardQueue.length &&
+           (balls.length + hazards.length) < MAX_ACTIVE_BODIES) {
+      const head = hazardQueue[0];
+      if (head.dueTime > nowTime) break;
+
       const pos = spawnHazard(head.side);
       if (pos){
         flashSpawnRingAt(pos);
         hazardQueue.shift();
+        processed++;
       } else {
         if (head.retries > 0){
           head.retries -= 1;
-          head.dueTime = nowTime + 0.16; // kleiner weiterer Offset
+          head.dueTime = nowTime + 0.12; // kurzer weiterer Offset
         } else {
-          hazardQueue.shift();
+          hazardQueue.shift(); // aufgeben
         }
       }
     }
