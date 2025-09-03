@@ -11,6 +11,7 @@ export const PUNCH_SPEED = 0.6;         // m/s Mindestgeschwindigkeit der Faust
 export const SPAWN_MAX_BELOW = 0.70;    // m (max. 70 cm unter Headset)
 export const MISS_PLANE_OFFSET = 0.02;  // m vor der initialen Ebene
 export const SPAWN_BIAS = 0.20;         // m (20 cm näher zu dir, reduziert Wand-Occlusion)
+export const MIN_SPAWN_DISTANCE = 0.35; // m Mindestabstand zwischen Spawns
 
 // --- HUD ---
 export const HUD_FORWARD = 1.0;         // m vor initialer Position
