@@ -22,7 +22,7 @@ import { createMenu } from './menu.js';
 ========================================================= */
 const renderer = new THREE.WebGLRenderer({
   alpha: true,
-  antialias: false,                 // spart Fillrate/Speicher
+  antialias: false,
   powerPreference: 'high-performance',
   stencil: false,
   depth: true
@@ -41,7 +41,7 @@ window.addEventListener('resize', ()=>renderer.setSize(window.innerWidth, window
 
 renderer.xr.addEventListener('sessionstart', ()=>{
   poseLocked = false;
-  renderer.setPixelRatio(1.2); // konservativer
+  renderer.setPixelRatio(1.2);
   if (renderer.xr.setFoveation) renderer.xr.setFoveation(1.0);
   if (renderer.xr.setFramebufferScaleFactor) renderer.xr.setFramebufferScaleFactor(0.85);
 });
@@ -110,21 +110,20 @@ function drawUIButton(btn){
   tex.needsUpdate = true;
 }
 const backBtn = makeUIButton('Zurück zum Menü', 0.58, 0.14);
-scene.add(backBtn);                         // World-Space, nicht mehr Kind vom HUD
+scene.add(backBtn);
 backBtn.material.depthTest = false;
 backBtn.renderOrder = 11;
 backBtn.visible = false;
 
-const BACK_BTN_OFFSET_M = 0.24; // Abstand unterhalb des HUD
+const BACK_BTN_OFFSET_M = 0.24;
 function placeBackButton(){
-  // Button unter dem HUD platzieren – gleiche Orientierung
   hud.plane.updateMatrixWorld();
   _v1.setFromMatrixPosition(hud.plane.matrixWorld);
   const upLocal  = _v2.set(0,1,0).applyQuaternion(hud.plane.quaternion);
   const fwdLocal = _v3.set(0,0,1).applyQuaternion(hud.plane.quaternion);
   backBtn.position.copy(_v1)
-    .addScaledVector(upLocal, -BACK_BTN_OFFSET_M) // tiefer als HUD
-    .addScaledVector(fwdLocal, 0.012);            // minimal nach vorne
+    .addScaledVector(upLocal, -BACK_BTN_OFFSET_M)
+    .addScaledVector(fwdLocal, 0.012);
   backBtn.quaternion.copy(hud.plane.quaternion);
 }
 
@@ -167,6 +166,11 @@ const EXT_PROB = {
   'Profi':     { wide: 0.22, deep: 0.22 },
 };
 
+// Vertikale S-Kurven (Downtrend) – Parameter
+const VDRIFT_BIAS_MIN = 0.05;  // m/s nach unten
+const VDRIFT_BIAS_MAX = 0.15;  // m/s nach unten
+const VDRIFT_SHARE    = 0.5;   // 50% vertikale S statt horizontaler S
+
 const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS);
 menu.group.visible = false;
 scene.add(menu.group);
@@ -203,7 +207,7 @@ function placeCountdown(){
 function beginCountdown(){
   const sel = menu.getSelection();
   applyGamePreset(DIFF_LABELS[sel.difficultyIndex], SPEED_LABELS[sel.speedIndex], TIME_LABELS[sel.timeIndex]);
-  hardResetRound(); // neues Spiel bei 0
+  hardResetRound();
   menu.setVisible(false); setLasersVisible(false);
   hideBackToMenuButton();
   game.menuActive=false;
@@ -342,15 +346,30 @@ function spawnBall(sideSign,{forceStraight=false}={}){
 
   const prevDot = _v4.subVectors(obj.position, iPos).dot(iForward);
 
+  // --- S-Kurven-Setup ---
   let driftAmp=0, driftOmega=0, driftPhase=0;
+  let driftAxisIdx=0; // 0 = horizontal (iRight), 1 = vertikal (iUp)
+  let driftBiasRate=0; // nur für vertikal: langsamer Downtrend
+
   const mustBeStraight = forceStraight || extWide || extDeep;
   if (!mustBeStraight){
     driftAmp = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
     const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
     driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
+
+    if (Math.random() < VDRIFT_SHARE){
+      driftAxisIdx = 1; // vertikal
+      driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); // m/s nach unten
+    } else {
+      driftAxisIdx = 0; // horizontal
+    }
   }
 
-  balls.push({ obj, velocity: velocity.clone(), alive:true, spin, spinAxis, spinSpeed, prevDot, t:0, driftAmp, driftOmega, driftPhase, prevLateral:0 });
+  balls.push({
+    obj, velocity: velocity.clone(), alive:true, spin, spinAxis, spinSpeed,
+    prevDot, t:0, driftAmp, driftOmega, driftPhase,
+    driftAxisIdx, driftBiasRate, prevDrift:0
+  });
 }
 
 function spawnHazard(sideSign){
@@ -371,6 +390,33 @@ function spawnHazard(sideSign){
   const prevDot = _v3.subVectors(obj.position, iPos).dot(iForward);
   hazards.push({ obj, velocity: velocity.clone(), alive:true, prevDot });
   return _v1.clone();
+}
+
+/* =========================================================
+   Hazard trifft Körper (Körperkapsel)
+========================================================= */
+// Einfache Kapsel vom Headset nach unten (~1.1 m), Radius ~0.28 m
+const BODY_CAPSULE_HEIGHT = 1.10; // Meter
+const BODY_CAPSULE_RADIUS = 0.28; // Meter
+
+function hazardHitsBody(point){
+  // Headset-Weltposition
+  const head = _bpHead;
+  camera.getWorldPosition(head);
+
+  // Hüftpunkt (nach unten entlang der initialen Up-Achse)
+  const hip = _bpHip.copy(head).addScaledVector(iUp, -BODY_CAPSULE_HEIGHT);
+
+  // kürzeste Distanz punkt->Segment(head-hip)
+  const ab = _bpAB.subVectors(hip, head);
+  const ap = _bpAP.subVectors(point, head);
+  const abLen2 = ab.lengthSq();
+  let t = abLen2 > 1e-6 ? ap.dot(ab)/abLen2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const closest = _bpClosest.copy(head).addScaledVector(ab, t);
+  const dist = _bpTmp.subVectors(point, closest).length();
+
+  return dist <= (HAZARD_RADIUS + BODY_CAPSULE_RADIUS);
 }
 
 /* =========================================================
@@ -538,7 +584,7 @@ function closeMenuResume(){
 }
 function showBackToMenuButton(){
   backBtn.visible = true;
-  placeBackButton();     // sofort korrekt platzieren
+  placeBackButton();
   setLasersVisible(true);
   menu.setVisible(false);
   game.menuActive = false;
@@ -563,6 +609,14 @@ const _v4 = new THREE.Vector3();
 const _v5 = new THREE.Vector3();
 const _v6 = new THREE.Vector3();
 const _v7 = new THREE.Vector3();
+
+// Body-capsule temps
+const _bpHead = new THREE.Vector3();
+const _bpHip  = new THREE.Vector3();
+const _bpAB   = new THREE.Vector3();
+const _bpAP   = new THREE.Vector3();
+const _bpClosest = new THREE.Vector3();
+const _bpTmp  = new THREE.Vector3();
 
 function loop(){
   const dt = clock.getDelta();
@@ -661,14 +715,25 @@ function loop(){
     if (_debugRingTimer <= 0){ _debugRing.visible = false; }
   }
 
-  // Balls – Update (keine Allokationen im Hot-Path)
+  // Balls – Update
   for (let i=balls.length-1;i>=0;i--){
     const b=balls[i]; if(!b.alive){ balls.splice(i,1); continue; }
     b.obj.position.addScaledVector(b.velocity, dt);
+
     if (b.driftAmp>0 && b.driftOmega>0){
-      b.t+=dt; const lat=b.driftAmp*Math.sin(b.driftOmega*b.t+b.driftPhase);
-      const d=lat-b.prevLateral; b.obj.position.addScaledVector(iRight,d); b.prevLateral=lat;
+      b.t+=dt;
+      const lat = b.driftAmp*Math.sin(b.driftOmega*b.t+b.driftPhase);
+      const d = lat - b.prevDrift;
+      const axisVec = (b.driftAxisIdx===1) ? iUp : iRight; // vertikal oder horizontal
+      b.obj.position.addScaledVector(axisVec, d);
+      b.prevDrift = lat;
+
+      if (b.driftAxisIdx===1 && b.driftBiasRate>0){
+        // langsamer Downtrend (von oben nach unten)
+        b.obj.position.addScaledVector(iUp, -b.driftBiasRate*dt);
+      }
     }
+
     if (b.spin && b.spinAxis) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed*dt);
 
     const p = b.obj.getWorldPosition(_v1);
@@ -680,7 +745,7 @@ function loop(){
     if (dot<-6.0){ b.alive=false; scene.remove(b.obj); recycleBall(b.obj); balls.splice(i,1); }
   }
 
-  // Hazards – Update
+  // Hazards – Update (inkl. Körpertreffer)
   for (let i=hazards.length-1;i>=0;i--){
     const h=hazards[i]; if(!h.alive){ hazards.splice(i,1); continue; }
     h.obj.position.addScaledVector(h.velocity, dt);
@@ -688,7 +753,7 @@ function loop(){
     if(ax&&sp) h.obj.rotateOnAxis(ax, sp*dt);
 
     const p = h.obj.getWorldPosition(_v1);
-    if (fistsHitHazard(p,fists)){ onHazardHit(h); hazards.splice(i,1); continue; }
+    if (fistsHitHazard(p,fists) || hazardHitsBody(p)){ onHazardHit(h); hazards.splice(i,1); continue; }
 
     const dot = _v2.subVectors(h.obj.position, iPos).dot(iForward);
     if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.alive=false; scene.remove(h.obj); recycleHazard(h.obj); hazards.splice(i,1); continue; }
