@@ -13,7 +13,7 @@ import {
 
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
-import { loadBall, isBallReady, makeBall } from './ball.js';
+import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall } from './ball.js';
 import { createHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
@@ -264,10 +264,8 @@ function flashSpawnRingAt(pos){
 }
 
 /* ======================= Object Pooling ======================= */
-const ballPool = [], hazardPool = [];
-const MAX_POOL_BALLS = 64, MAX_POOL_HAZ = 32;
-function getPooledBall(){ return ballPool.pop() || makeBall(); }
-function recycleBall(mesh){ if (!mesh) return; mesh.visible=false; mesh.position.set(0,-999,0); if (ballPool.length<MAX_POOL_BALLS) ballPool.push(mesh); }
+const hazardPool = [];
+const MAX_POOL_HAZ = 32;
 function getPooledHazard(){ return hazardPool.pop() || createHazard(); }
 function recycleHazard(mesh){ if (!mesh) return; mesh.visible=false; mesh.position.set(0,-999,0); if (hazardPool.length<MAX_POOL_HAZ) hazardPool.push(mesh); }
 
@@ -279,7 +277,7 @@ const MAX_SPAWN_TRIES = 5;
 function isSpawnPosClear(p){
   const minDistSq = MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE;
   for (const b of balls){
-    if (b.obj.position.distanceToSquared(p) < minDistSq) return false;
+    if (b.position.distanceToSquared(p) < minDistSq) return false;
   }
   for (const h of hazards){
     if (h.obj.position.distanceToSquared(p) < minDistSq) return false;
@@ -308,14 +306,13 @@ function spawnBall(sideSign,{style='auto'}={}){
 
     if (!isSpawnPosClear(_v1)) continue;
 
-    const obj = getPooledBall(); obj.visible = true; obj.position.copy(_v1); scene.add(obj);
+    const idx = allocBall();
+    if (idx === undefined) continue;
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.ballSpeed);
 
-    const spin = Math.random() < 0.5;
-    let spinAxis=null, spinSpeed=0;
-    if (spin){ spinAxis=_v3.set(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1).normalize().clone(); spinSpeed=THREE.MathUtils.lerp(0.5,2.0,Math.random()); }
+    const spinSpeed = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.5,2.0,Math.random());
 
-    const prevDot = _v4.subVectors(obj.position, iPos).dot(iForward);
+    const prevDot = _v4.subVectors(_v1, iPos).dot(iForward);
 
     // --- Drift-Setup je nach gewünschtem Stil ---
     let driftAmp=0, driftOmega=0, driftPhase=0, driftAxisIdx=0, driftBiasRate=0;
@@ -325,7 +322,6 @@ function spawnBall(sideSign,{style='auto'}={}){
 
     let mustBeStraight = explicitStraight || extWide || extDeep;
     if (!mustBeStraight){
-      // bei 'auto' entscheidet straightShare
       if (style==='auto'){ mustBeStraight = Math.random()<tuning.straightShare; }
     }
 
@@ -337,14 +333,25 @@ function spawnBall(sideSign,{style='auto'}={}){
       if (explicitSV){ driftAxisIdx = 1; driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); }
       else if (explicitSH){ driftAxisIdx = 0; }
       else {
-        // auto-S → zufällig H/V 50/50
         driftAxisIdx = Math.random()<0.5 ? 0 : 1;
         if (driftAxisIdx===1) driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
       }
     }
 
-    balls.push({ obj, velocity: velocity.clone(), alive:true, spin, spinAxis, spinSpeed, prevDot,
-                 t:0, driftAmp, driftOmega, driftPhase, driftAxisIdx, driftBiasRate, prevDrift:0 });
+    balls.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot,
+                 t:0, driftAmp, driftOmega, driftPhase, driftAxisIdx, driftBiasRate });
+
+    _m1.makeTranslation(_v1.x, _v1.y, _v1.z);
+    getBallMesh().setMatrixAt(idx, _m1);
+    getBallMesh().instanceMatrix.needsUpdate = true;
+
+    const attr = getBallAttribute();
+    const aIndex = idx*4;
+    attr.array[aIndex+0] = spinSpeed;
+    attr.array[aIndex+1] = (driftAxisIdx===1 ? -driftAmp : driftAmp);
+    attr.array[aIndex+2] = driftOmega;
+    attr.array[aIndex+3] = driftPhase;
+    attr.needsUpdate = true;
     return true;
   }
 
@@ -392,13 +399,13 @@ function hazardHitsBody(point){
 
 let _lastHitAt = 0;
 function onBallHit(b){
-  b.alive=false; scene.remove(b.obj); recycleBall(b.obj);
+  b.alive=false; freeBall(b.index);
   hits++; streak++; score+=comboMultiplier();
   const now=performance.now(); if (AUDIO_ENABLED && now-_lastHitAt>40){ hitSound(); _lastHitAt=now; }
   rumble(0.9,60); updateHUD();
 }
 function onBallMiss(b){
-  b.alive=false; scene.remove(b.obj); recycleBall(b.obj);
+  b.alive=false; freeBall(b.index);
   misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40); updateHUD();
 }
 function onHazardHit(h){
@@ -423,13 +430,13 @@ function fistsHitHazard(p,fists){
 
 /* ========================= Round Control ========================= */
 function hardResetRound(){
-  for (const b of [...balls]){ scene.remove(b.obj); recycleBall(b.obj); }
+  for (const b of [...balls]){ freeBall(b.index); }
   for (const h of [...hazards]){ scene.remove(h.obj); recycleHazard(h.obj); }
   balls.length=0; hazards.length=0; hits=0; misses=0; score=0; streak=0; hazardHits=0;
   updateHUD('');
 }
 function clearActiveObjectsKeepScore(){
-  for (const b of [...balls]){ scene.remove(b.obj); recycleBall(b.obj); }
+  for (const b of [...balls]){ freeBall(b.index); }
   for (const h of [...hazards]){ scene.remove(h.obj); recycleHazard(h.obj); }
   balls.length=0; hazards.length=0;
 }
@@ -511,6 +518,8 @@ let spawnTimer=0;
 // Temp-Vektoren
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3(), _v6 = new THREE.Vector3(), _v7 = new THREE.Vector3();
+const _m1 = new THREE.Matrix4();
+let elapsed = 0;
 
 /* ---- Pattern-Engine State ---- */
 let curPattern = null;
@@ -526,6 +535,9 @@ function ensurePattern(){
 
 function loop(){
   const dt = clock.getDelta();
+  elapsed += dt;
+  const shader = getBallMesh()?.material?.userData?.shader;
+  if (shader) shader.uniforms.uTime.value = elapsed;
 
   // A/X Face-Buttons
   const session = renderer.xr.getSession?.();
@@ -640,23 +652,28 @@ function loop(){
   // Balls – Update
   for (let i=balls.length-1;i>=0;i--){
     const b=balls[i]; if(!b.alive){ balls.splice(i,1); continue; }
-    b.obj.position.addScaledVector(b.velocity, dt);
+    b.basePos.addScaledVector(b.velocity, dt);
     if (b.driftAmp>0 && b.driftOmega>0){
       b.t+=dt; const lat=b.driftAmp*Math.sin(b.driftOmega*b.t+b.driftPhase);
-      const d=lat-b.prevDrift; const axisVec = (b.driftAxisIdx===1) ? iUp : iRight;
-      b.obj.position.addScaledVector(axisVec, d); b.prevDrift=lat;
-      if (b.driftAxisIdx===1 && b.driftBiasRate>0){ b.obj.position.addScaledVector(iUp, -b.driftBiasRate*dt); }
+      const axisVec = (b.driftAxisIdx===1) ? iUp : iRight;
+      b.position.copy(b.basePos).addScaledVector(axisVec, lat);
+      if (b.driftAxisIdx===1 && b.driftBiasRate>0){ b.basePos.addScaledVector(iUp, -b.driftBiasRate*dt); }
+    } else {
+      b.position.copy(b.basePos);
     }
-    if (b.spin && b.spinAxis) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed*dt);
 
-    const p = b.obj.getWorldPosition(_v1);
+    _m1.makeTranslation(b.basePos.x, b.basePos.y, b.basePos.z);
+    getBallMesh().setMatrixAt(b.index, _m1);
+
+    const p = b.position;
     if (fistsHit(p,fists)){ onBallHit(b); balls.splice(i,1); continue; }
 
-    const dot = _v2.subVectors(b.obj.position, iPos).dot(iForward);
+    const dot = _v2.subVectors(b.position, iPos).dot(iForward);
     if (b.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ onBallMiss(b); balls.splice(i,1); continue; }
     b.prevDot=dot;
-    if (dot<-6.0){ b.alive=false; scene.remove(b.obj); recycleBall(b.obj); balls.splice(i,1); }
+    if (dot<-6.0){ b.alive=false; freeBall(b.index); balls.splice(i,1); }
   }
+  getBallMesh().instanceMatrix.needsUpdate = true;
 
   // Hazards – Update (inkl. Körpertreffer)
   for (let i=hazards.length-1;i>=0;i--){
@@ -678,9 +695,9 @@ function loop(){
 }
 
 /* ========================= Start/Shutdown ========================= */
-async function start(){ try{ await loadBall(); }catch(e){ console.error('ball.glb konnte nicht geladen werden:', e); } renderer.setAnimationLoop(loop); }
+async function start(){ try{ await loadBall(); scene.add(getBallMesh()); }catch(e){ console.error('ball.glb konnte nicht geladen werden:', e); } renderer.setAnimationLoop(loop); }
 renderer.xr.addEventListener('sessionend', ()=>{
-  for (const b of balls){ scene.remove(b.obj); recycleBall(b.obj); }
+  for (const b of balls){ freeBall(b.index); }
   for (const h of hazards){ scene.remove(h.obj); recycleHazard(h.obj); }
   balls.length=0; hazards.length=0;
   if (_debugRing){ scene.remove(_debugRing); _debugRing=null; }
