@@ -7,7 +7,6 @@ import {
   DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
   AUDIO_ENABLED, HAPTICS_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
-  GAME_MODE, SPRINT_DURATION, COMBO_STEP, COMBO_MAX_MULT,
   DEBUG_HAZARD_RING_MS
 } from './config.js';
 
@@ -36,12 +35,12 @@ let poseLocked = false;
 const iPos = new THREE.Vector3(), iQuat = new THREE.Quaternion();
 const iForward = new THREE.Vector3(), iUp = new THREE.Vector3(), iRight = new THREE.Vector3();
 
-function lockInitialPose() {
+function lockInitialPose(){
   iPos.setFromMatrixPosition(camera.matrixWorld);
   iQuat.copy(camera.quaternion);
   iForward.set(0,0,-1).applyQuaternion(iQuat).normalize();
   iUp.set(0,1,0).applyQuaternion(iQuat).normalize();
-  iRight.crossVectors(iForward, iUp).normalize();
+  iRight.crossVectors(iForward,iUp).normalize();
   poseLocked = true;
 
   hud.place({ iPos, iForward, iRight });
@@ -65,7 +64,7 @@ hud.plane.material.depthTest  = false;
 hud.plane.visible = false;
 
 // ---------- Fäuste ----------
-const fistsMgr = new FistsManager(renderer, scene, { showControllerModels: true, sphereVisRadius: 0.03 });
+const fistsMgr = new FistsManager(renderer, scene, { showControllerModels:true, sphereVisRadius:0.03 });
 
 // ---------- Haptik ----------
 function rumble(intensity=0.8, durationMs=60){
@@ -81,45 +80,43 @@ function rumble(intensity=0.8, durationMs=60){
 }
 
 // ---------- Menü / Presets ----------
-const DIFF_LABELS = ['Anfänger', 'Aufsteiger', 'Profi'];
-const SPEED_LABELS = ['Langsam', 'Mittel', 'Schnell'];
-const DIFFICULTY_DRIFT = { 'Anfänger': 1.00, 'Aufsteiger': 0.70, 'Profi': 0.25 };
-const DOUBLE_STRAIGHT_PROB = 0.28;
-const SPEED_PRESETS = { 'Langsam': 0.85, 'Mittel': 1.0, 'Schnell': 1.25 };
+const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi'];
+const SPEED_LABELS = ['Langsam','Mittel','Schnell'];
+const TIME_LABELS  = ['Endlos','1:00','3:00','5:00'];
 
-const menu = createMenu(DIFF_LABELS, SPEED_LABELS);
+const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25 };
+const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
+
+// NEU: „extra breit“ (horizontal) und „extra tief“ – beide ~20 cm, geradlinig
+const WIDE_EXT_M = 0.20;   // 20 cm breiter als bisherige Max-Breite
+const DEEP_EXT_M = 0.20;   // 20 cm tiefer als bisherige Max-Tiefe
+const EXT_PROB = {
+  'Anfänger':  { wide: 0.05, deep: 0.05 },
+  'Aufsteiger':{ wide: 0.12, deep: 0.12 },
+  'Profi':     { wide: 0.22, deep: 0.22 },
+};
+
+const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS);
 menu.group.visible = false;
 scene.add(menu.group);
 
 // ---------- Countdown ----------
 let countdown = { active:false, time:0, plane:null, ctx:null, tex:null };
-function ensureCountdownPlane() {
+function ensureCountdownPlane(){
   if (countdown.plane) return;
   const canvas=document.createElement('canvas'); canvas.width=512; canvas.height=256;
-  const ctx=canvas.getContext('2d');
-  const tex=new THREE.CanvasTexture(canvas); tex.minFilter=THREE.LinearFilter;
-  const mat=new THREE.MeshBasicMaterial({ map: tex, transparent:true, depthWrite:false });
+  const ctx=canvas.getContext('2d'); const tex=new THREE.CanvasTexture(canvas); tex.minFilter=THREE.LinearFilter;
+  const mat=new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false });
   const plane=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.3), mat); plane.visible=false; scene.add(plane);
   countdown={ active:false, time:0, plane, ctx, tex };
 }
-function drawCountdown(n){
-  const {ctx,tex}=countdown;
-  ctx.clearRect(0,0,512,256);
-  ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,512,256);
-  ctx.fillStyle='#fff'; ctx.font='bold 180px system-ui, Arial';
-  const s=String(n), tw=ctx.measureText(s).width;
-  ctx.fillText(s,(512-tw)/2,190);
-  tex.needsUpdate=true;
-}
-function placeCountdown(){
-  const p = new THREE.Vector3().copy(iPos).addScaledVector(iForward,1.0);
-  const l = new THREE.Vector3().copy(p).sub(iForward);
-  countdown.plane.position.copy(p);
-  countdown.plane.lookAt(l);
-}
+function drawCountdown(n){ const {ctx,tex}=countdown; ctx.clearRect(0,0,512,256); ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#fff'; ctx.font='bold 180px system-ui, Arial'; const s=String(n); const tw=ctx.measureText(s).width; ctx.fillText(s,(512-tw)/2,190); tex.needsUpdate=true; }
+function placeCountdown(){ const p=new THREE.Vector3().copy(iPos).addScaledVector(iForward,1.0); const l=new THREE.Vector3().copy(p).sub(iForward); countdown.plane.position.copy(p); countdown.plane.lookAt(l); }
+
 function beginCountdown(){
   const sel = menu.getSelection();
-  applyGamePreset(DIFF_LABELS[sel.difficultyIndex], SPEED_LABELS[sel.speedIndex]);
+  applyGamePreset(DIFF_LABELS[sel.difficultyIndex], SPEED_LABELS[sel.speedIndex], TIME_LABELS[sel.timeIndex]);
+  hardResetRound(); // neues Spiel bei 0
   menu.setVisible(false); setLasersVisible(false);
   game.menuActive=false;
   ensureCountdownPlane(); placeCountdown();
@@ -127,92 +124,124 @@ function beginCountdown(){
 }
 
 // ---------- Game-State ----------
-const game = { menuActive: true, running: false };
+const game = { menuActive:true, running:false };
 const tuning = {
-  spawnInterval: SPAWN_INTERVAL, straightShare: 1.0, hazardProb: HAZARD_PROB,
-  ballSpeed: BALL_SPEED, hazardSpeed: HAZARD_SPEED,
+  spawnInterval: SPAWN_INTERVAL,
+  straightShare: 1.0,
+  ballSpeed: BALL_SPEED,
+  hazardSpeed: HAZARD_SPEED,
+  hazardProb: HAZARD_PROB,
   driftMinAmp: DRIFT_MIN_AMPLITUDE, driftMaxAmp: DRIFT_MAX_AMPLITUDE,
-  driftMinFreq: DRIFT_MIN_FREQ,     driftMaxFreq: DRIFT_MAX_FREQ
+  driftMinFreq: DRIFT_MIN_FREQ,     driftMaxFreq: DRIFT_MAX_FREQ,
+  wideProb: 0.0, deepProb: 0.0
 };
-function applyGamePreset(diffName, speedName){
-  tuning.straightShare = DIFFICULTY_DRIFT[diffName] ?? 1.0;
+let gameMode = 'endless'; // 'endless' | 'time60' | 'time180' | 'time300'
+let timeLeft = null;
+
+function applyGamePreset(diffName, speedName, timeLabel){
+  // Schwierigkeit: S-Kurven-Anteil + Extreme-Spawn-Wahrscheinlichkeiten
+  tuning.straightShare = DIFFICULTY_STRAIGHT_SHARE[diffName] ?? 1.0;
+  const ext = EXT_PROB[diffName] ?? EXT_PROB['Aufsteiger'];
+  tuning.wideProb = ext.wide;
+  tuning.deepProb = ext.deep;
+
+  // Speed
   const sMul = SPEED_PRESETS[speedName] ?? 1.0;
   tuning.ballSpeed   = BALL_SPEED   * sMul;
   tuning.hazardSpeed = HAZARD_SPEED * sMul;
-  tuning.spawnInterval = SPAWN_INTERVAL;
-  tuning.hazardProb    = HAZARD_PROB;
-  hud.set({ note: `${diffName} · ${speedName}` });
+
+  // Zeitmodus
+  if (timeLabel==='Endlos'){ gameMode='endless'; timeLeft=null; }
+  else if (timeLabel==='1:00'){ gameMode='time60'; timeLeft=60; }
+  else if (timeLabel==='3:00'){ gameMode='time180'; timeLeft=180; }
+  else if (timeLabel==='5:00'){ gameMode='time300'; timeLeft=300; }
+  else { gameMode='endless'; timeLeft=null; }
+
+  hud.set({ note: `${diffName} · ${speedName} · ${timeLabel}` });
 }
 
 // ---------- Assets & Score ----------
 await loadBall();
 const balls=[], hazards=[];
 let hits=0, misses=0, score=0, streak=0;
-let gameMode = GAME_MODE;
-let timeLeft = (gameMode==='sprint60') ? SPRINT_DURATION : null;
-const BEST_KEY='arpunch_best_sprint60';
-let best = (gameMode==='sprint60') ? (Number(localStorage.getItem(BEST_KEY))||0) : null;
-function comboMultiplier(){ if(streak<=0) return 1; const m=1+Math.floor(streak/COMBO_STEP); return Math.min(COMBO_MAX_MULT,m); }
-function updateHUD(note=''){ hud.set({ hits, misses, score, streak, mode:gameMode, timeLeft, best, note }); }
+function comboMultiplier(){ if (streak<=0) return 1; const m=1+Math.floor(streak/5); return Math.min(4, m); }
+function updateHUD(note=''){ hud.set({ hits, misses, score, streak, mode:gameMode, timeLeft, best:null, note }); }
 
 // ---------- Debug-Ring ----------
 function flashSpawnRingAt(pos){
   if (!DEBUG_HAZARD_RING_MS) return;
   const ring=new THREE.Mesh(new THREE.TorusGeometry(0.12,0.012,8,24), new THREE.MeshBasicMaterial({ color:0xffffff }));
-  ring.position.copy(pos);
-  const look=new THREE.Vector3().copy(pos).sub(iForward);
-  ring.lookAt(look);
-  scene.add(ring);
-  setTimeout(()=>scene.remove(ring), DEBUG_HAZARD_RING_MS);
+  ring.position.copy(pos); ring.lookAt(new THREE.Vector3().copy(pos).sub(iForward));
+  scene.add(ring); setTimeout(()=>scene.remove(ring), DEBUG_HAZARD_RING_MS);
 }
 
 // ---------- Spawner ----------
 function randRange(a,b){ return a + Math.random()*(b-a); }
 function spawnBall(sideSign,{forceStraight=false}={}){
-  if(!isBallReady()||!poseLocked) return;
-  const sideMag = Math.random()<0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
-  const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
-  const spawnPos=new THREE.Vector3()
+  if (!isBallReady() || !poseLocked) return;
+
+  // Basis-Seitenoffset (eng/weit)
+  let sideMag = Math.random() < 0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
+  let heightOffset = -Math.random() * SPAWN_MAX_BELOW;
+
+  // „extra breit“ (horizontal +20 cm) & „extra tief“ (−20 cm) – nie beides zugleich
+  let extWide = Math.random() < tuning.wideProb;
+  let extDeep = Math.random() < tuning.deepProb;
+  if (extWide && extDeep){ if (Math.random() < 0.5) extDeep=false; else extWide=false; }
+
+  if (extWide) sideMag += WIDE_EXT_M;    // HORIZONTALE Erweiterung
+  if (extDeep) heightOffset -= DEEP_EXT_M; // VERTIKALE Erweiterung
+
+  // Spawn-Position (vorne bleibt wie gehabt)
+  const forward = (SPAWN_DISTANCE - SPAWN_BIAS);
+  const spawnPos = new THREE.Vector3()
     .copy(iPos)
-    .addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS))
+    .addScaledVector(iForward, forward)
     .addScaledVector(iRight, sideMag*sideSign)
     .addScaledVector(iUp, heightOffset);
 
-  const obj=makeBall(); obj.position.copy(spawnPos); scene.add(obj);
-  const velocity=new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.ballSpeed);
-  const spin=Math.random()<0.5; let spinAxis=null, spinSpeed=0;
-  if(spin){ spinAxis=new THREE.Vector3(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1).normalize(); spinSpeed=THREE.MathUtils.lerp(0.5,2.0,Math.random()); }
-  const prevDot=new THREE.Vector3().subVectors(spawnPos,iPos).dot(iForward);
+  const obj = makeBall(); obj.position.copy(spawnPos); scene.add(obj);
+  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.ballSpeed);
 
+  // Spin
+  const spin = Math.random() < 0.5; let spinAxis=null, spinSpeed=0;
+  if (spin){ spinAxis=new THREE.Vector3(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1).normalize(); spinSpeed=THREE.MathUtils.lerp(0.5,2.0,Math.random()); }
+  const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
+
+  // Drift / S-Kurve (deaktiviert bei extra breit/tief)
   let driftAmp=0, driftOmega=0, driftPhase=0;
-  if(!forceStraight){ driftAmp=randRange(tuning.driftMinAmp,tuning.driftMaxAmp); const f=randRange(tuning.driftMinFreq,tuning.driftMaxFreq); driftOmega=2*Math.PI*f; driftPhase=Math.random()*Math.PI*2; }
+  const mustBeStraight = forceStraight || extWide || extDeep;
+  if (!mustBeStraight){
+    driftAmp = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
+    const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
+    driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
+  }
 
   balls.push({ obj, velocity, alive:true, spin, spinAxis, spinSpeed, prevDot, t:0, driftAmp, driftOmega, driftPhase, prevLateral:0 });
 }
 function spawnHazard(sideSign){
-  if(!poseLocked) return null;
-  const sideMag = Math.random()<0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
+  if (!poseLocked) return null;
+  const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
   const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
-  const spawnPos=new THREE.Vector3()
+  const spawnPos = new THREE.Vector3()
     .copy(iPos)
     .addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS))
     .addScaledVector(iRight, sideMag*sideSign)
     .addScaledVector(iUp, heightOffset);
-
-  const obj=createHazard(); obj.position.copy(spawnPos); scene.add(obj);
-  const velocity=new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.hazardSpeed);
-  const prevDot=new THREE.Vector3().subVectors(spawnPos,iPos).dot(iForward);
+  const obj = createHazard(); obj.position.copy(spawnPos); scene.add(obj);
+  const velocity = new THREE.Vector3().copy(iForward).multiplyScalar(-tuning.hazardSpeed);
+  const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
   hazards.push({ obj, velocity, alive:true, prevDot }); return spawnPos.clone();
 }
 
 // ---------- Events ----------
 function onBallHit(b){ b.alive=false; setOpacity(b.obj,0.25); setTimeout(()=>scene.remove(b.obj),60); hits++; streak++; score+=comboMultiplier(); if(AUDIO_ENABLED)hitSound(); rumble(0.9,60); updateHUD(); }
 function onBallMiss(b){ b.alive=false; scene.remove(b.obj); misses++; streak=0; if(AUDIO_ENABLED)missSound(); rumble(0.25,40); updateHUD(); }
-function onHazardHit(h){ h.alive=false; scene.remove(h.obj); streak=0; score=Math.max(0,score-HAZARD_PENALTY); if(AUDIO_ENABLED)penaltySound(); rumble(1.0,80); updateHUD(); }
+function onHazardHit(h){ h.alive=false; scene.remove(h.obj); streak=0; score=Math.max(0, score-HAZARD_PENALTY); if(AUDIO_ENABLED)penaltySound(); rumble(1.0,80); updateHUD(); }
 
 // ---------- Collision ----------
-function fistsHit(p,fists){ for(const f of fists){ const d=new THREE.Vector3().subVectors(p,f.pos); if(d.length()<=(BALL_RADIUS+FIST_RADIUS)&&f.vel.length()>=PUNCH_SPEED&&d.dot(f.vel)>0) return true; } return false; }
-function fistsHitHazard(p,fists){ for(const f of fists){ const d=new THREE.Vector3().subVectors(p,f.pos); if(d.length()<=(HAZARD_RADIUS+FIST_RADIUS)&&f.vel.length()>=PUNCH_SPEED&&d.dot(f.vel)>0) return true; } return false; }
+function fistsHit(p,fists){ for (const f of fists){ const d=new THREE.Vector3().subVectors(p,f.pos); if (d.length() <= (BALL_RADIUS+FIST_RADIUS) && f.vel.length()>=PUNCH_SPEED && d.dot(f.vel)>0) return true; } return false; }
+function fistsHitHazard(p,fists){ for (const f of fists){ const d=new THREE.Vector3().subVectors(p,f.pos); if (d.length() <= (HAZARD_RADIUS+FIST_RADIUS) && f.vel.length()>=PUNCH_SPEED && d.dot(f.vel)>0) return true; } return false; }
 
 // ---------- Round Control ----------
 function hardResetRound(){
@@ -220,7 +249,6 @@ function hardResetRound(){
   for (const h of [...hazards]) scene.remove(h.obj);
   balls.length=0; hazards.length=0;
   hits=0; misses=0; score=0; streak=0;
-  timeLeft = (gameMode==='sprint60') ? SPRINT_DURATION : null;
   updateHUD('');
 }
 function clearActiveObjectsKeepScore(){
@@ -229,7 +257,7 @@ function clearActiveObjectsKeepScore(){
   balls.length=0; hazards.length=0;
 }
 
-// ---------- Controller Rays (Laser) – via Hit-Plane ----------
+// ---------- Controller Rays (Hit-Plane) ----------
 const raycaster = new THREE.Raycaster();
 const controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
 const lasers = [];
@@ -239,8 +267,7 @@ function makeLaser(){
   const mat=new THREE.MeshBasicMaterial({ color:0x00e5ff, transparent:true, opacity:0.95, depthTest:false });
   const m=new THREE.Mesh(geo,mat);
   m.rotation.x=Math.PI/2; m.position.z=-(baseLen/2);
-  m.userData.baseLen=baseLen;
-  m.visible=false;
+  m.userData.baseLen=baseLen; m.visible=false;
   return m;
 }
 function setLaserDistance(laser, dist){
@@ -255,7 +282,7 @@ for (const c of controllers){
   scene.add(c);
   const laser = makeLaser(); c.add(laser); lasers.push(laser);
 
-  c.addEventListener('selectstart', () => {
+  c.addEventListener('selectstart', ()=>{
     if (!game.menuActive) return;
     const hit = intersectHitPlane(c);
     if (!hit) return;
@@ -264,14 +291,12 @@ for (const c of controllers){
     if (!action) return;
     if (action.action==='start'){ beginCountdown(); }
     else if (action.action==='resume'){ closeMenuResume(); }
-    else if (action.action==='restart'){ hardResetRound(); beginCountdown(); }
+    else if (action.action==='restart'){ beginCountdown(); }
     else if (action.action==='quit'){ const s=renderer.xr.getSession?.(); if (s) s.end(); }
   });
 }
-
-// Hit-Plane Raycast
 function intersectHitPlane(controller){
-  const origin = new THREE.Vector3(), dir = new THREE.Vector3(0,0,-1);
+  const origin=new THREE.Vector3(), dir=new THREE.Vector3(0,0,-1);
   controller.getWorldPosition(origin);
   dir.applyQuaternion(controller.quaternion).normalize();
   raycaster.set(origin, dir);
@@ -279,7 +304,7 @@ function intersectHitPlane(controller){
   return hit || null;
 }
 
-// Menü öffnen/schließen via A/X
+// ---------- A/X Toggling ----------
 function isRisingEdgeAX(gp, key, store){
   if (!gp || !gp.buttons) return false;
   const pressed = !!(gp.buttons[3]?.pressed) || !!(gp.buttons[4]?.pressed);
@@ -293,16 +318,12 @@ function openMenuIngame(){
   clearActiveObjectsKeepScore(); // keine Misses beim Pausieren
   menu.placeAt(iPos, iForward);
   menu.setMode('ingame');
-  menu.setVisible(true);
-  setLasersVisible(true);
+  menu.setVisible(true); setLasersVisible(true);
   game.menuActive=true;
 }
 function closeMenuResume(){
-  menu.setVisible(false);
-  setLasersVisible(false);
-  game.menuActive=false;
-  game.running=true;
-  hud.plane.visible=true;
+  menu.setVisible(false); setLasersVisible(false);
+  game.menuActive=false; game.running=true; hud.plane.visible=true;
   spawnTimer = _pausedSpawnTimer;
 }
 
@@ -313,7 +334,7 @@ let spawnTimer=0, sideSwitch=1;
 function loop(){
   const dt = clock.getDelta();
 
-  // A/X Face-Buttons (beide Controller)
+  // A/X Face-Buttons
   const session = renderer.xr.getSession?.();
   if (session){
     if (!loop._btnPrev) loop._btnPrev = {};
@@ -331,36 +352,23 @@ function loop(){
     updateHUD('Konfigurieren & Starten');
   }
 
-  // Menü: Hover + Laser (Hit-Plane)
+  // Menü Hover/Laser
   if (game.menuActive){
-    // Wähle den Controller mit dem gültigen (nächsten) Hit
-    let bestHit=null, bestCtrlIdx=-1;
+    let bestHit=null, bestIdx=-1;
     for (let i=0;i<controllers.length;i++){
       const c=controllers[i];
       const hit = intersectHitPlane(c);
-      if (hit){
-        setLaserDistance(lasers[i], hit.distance);
-        lasers[i].visible = true;
-        if (!bestHit || hit.distance < bestHit.distance){
-          bestHit = hit; bestCtrlIdx = i;
-        }
-      } else {
-        lasers[i].visible = false;
-      }
+      if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true;
+        if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; bestIdx=i; }
+      } else { lasers[i].visible=false; }
     }
-    if (bestHit){
-      // stabil: genau dieser Punkt bestimmt den Hover
-      const btn = menu.pickButtonAtWorldPoint(bestHit.point);
-      menu.setHover(btn);
-    } else {
-      menu.setHover(null);
-    }
+    if (bestHit){ menu.setHover(menu.pickButtonAtWorldPoint(bestHit.point)); }
+    else { menu.setHover(null); }
   }
 
   // Countdown
   if (countdown.active){
-    countdown.time -= dt;
-    const n=Math.max(0,Math.ceil(countdown.time));
+    countdown.time -= dt; const n=Math.max(0,Math.ceil(countdown.time));
     drawCountdown(n); placeCountdown();
     if (countdown.time<=0){
       countdown.active=false; countdown.plane.visible=false;
@@ -370,29 +378,35 @@ function loop(){
 
   const fists = fistsMgr.update(dt);
 
-  // Spawns nur wenn running
+  // Zeitmodus
   let canSpawn = game.running;
-  if (gameMode==='sprint60' && timeLeft!=null && game.running){
+  if (game.running && timeLeft!=null){
     timeLeft -= dt;
-    if (timeLeft<=0){
-      timeLeft=0; canSpawn=false;
-      if (best!=null && score>best){ best=score; try{ localStorage.setItem(BEST_KEY,String(best)); }catch{} }
+    if (timeLeft <= 0){
+      timeLeft = 0;
+      canSpawn = false;
+      game.running = false;
+      menu.placeAt(iPos, iForward);
+      menu.setMode('ingame');
+      menu.setVisible(true); setLasersVisible(true);
+      game.menuActive = true;
     }
   }
 
+  // Spawner
   spawnTimer += dt;
   if (canSpawn && spawnTimer >= tuning.spawnInterval){
-    spawnTimer=0;
-    const side=sideSwitch; sideSwitch*=-1;
+    spawnTimer = 0;
+    const side = sideSwitch; sideSwitch *= -1;
     if (HAZARD_ENABLED && Math.random()<tuning.hazardProb){
-      const pos=spawnHazard(side); if (pos) flashSpawnRingAt(pos);
+      const pos = spawnHazard(side); if (pos) flashSpawnRingAt(pos);
     } else {
       const isStraight = Math.random() < tuning.straightShare;
-      if (isStraight && Math.random()<DOUBLE_STRAIGHT_PROB){
-        spawnBall(-1,{forceStraight:true});
-        spawnBall(+1,{forceStraight:true});
+      if (isStraight && Math.random() < 0.28){
+        spawnBall(-1, { forceStraight:true });
+        spawnBall(+1, { forceStraight:true });
       } else {
-        spawnBall(side,{forceStraight:isStraight});
+        spawnBall(side, { forceStraight:isStraight });
       }
     }
   }
