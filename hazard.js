@@ -30,6 +30,7 @@ function makeMaterial(){
 
 const geo = new THREE.IcosahedronGeometry(HAZARD_RADIUS, 1);
 const mesh = new THREE.InstancedMesh(geo, makeMaterial(), MAX_HAZARDS);
+mesh.frustumCulled = false;
 mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
 const arr = new Float32Array(MAX_HAZARDS*4);
