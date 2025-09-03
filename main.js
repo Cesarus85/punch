@@ -4,7 +4,7 @@ import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARB
 import {
   BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT,
   BALL_SPEED, SPAWN_INTERVAL, PUNCH_SPEED, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET, SPAWN_BIAS,
-  DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
+  DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
   AUDIO_ENABLED, HAPTICS_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
   DEBUG_HAZARD_RING_MS,
@@ -310,25 +310,27 @@ function spawnBall(sideSign,{style='auto'}={}){
 
     // --- Drift-Setup je nach gewünschtem Stil ---
     let driftAmp=0, driftOmega=0, driftPhase=0, driftAxisIdx=0, driftBiasRate=0;
-    const explicitStraight = (style==='straight');
-    const explicitSH = (style==='s-h');
-    const explicitSV = (style==='s-v');
+    if (DRIFT_ENABLED){
+      const explicitStraight = (style==='straight');
+      const explicitSH = (style==='s-h');
+      const explicitSV = (style==='s-v');
 
-    let mustBeStraight = explicitStraight || extWide || extDeep;
-    if (!mustBeStraight){
-      if (style==='auto'){ mustBeStraight = Math.random()<tuning.straightShare; }
-    }
+      let mustBeStraight = explicitStraight || extWide || extDeep;
+      if (!mustBeStraight){
+        if (style==='auto'){ mustBeStraight = Math.random()<tuning.straightShare; }
+      }
 
-    if (!mustBeStraight){
-      driftAmp = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
-      const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
-      driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
+      if (!mustBeStraight){
+        driftAmp = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
+        const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
+        driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
 
-      if (explicitSV){ driftAxisIdx = 1; driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); }
-      else if (explicitSH){ driftAxisIdx = 0; }
-      else {
-        driftAxisIdx = Math.random()<0.5 ? 0 : 1;
-        if (driftAxisIdx===1) driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+        if (explicitSV){ driftAxisIdx = 1; driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); }
+        else if (explicitSH){ driftAxisIdx = 0; }
+        else {
+          driftAxisIdx = Math.random()<0.5 ? 0 : 1;
+          if (driftAxisIdx===1) driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+        }
       }
     }
 
@@ -342,9 +344,15 @@ function spawnBall(sideSign,{style='auto'}={}){
     const attr = getBallAttribute();
     const aIndex = idx*4;
     attr.array[aIndex+0] = spinSpeed;
-    attr.array[aIndex+1] = (driftAxisIdx===1 ? -driftAmp : driftAmp);
-    attr.array[aIndex+2] = driftOmega;
-    attr.array[aIndex+3] = driftPhase;
+    if (DRIFT_ENABLED){
+      attr.array[aIndex+1] = (driftAxisIdx===1 ? -driftAmp : driftAmp);
+      attr.array[aIndex+2] = driftOmega;
+      attr.array[aIndex+3] = driftPhase;
+    }else{
+      attr.array[aIndex+1] = 0;
+      attr.array[aIndex+2] = 0;
+      attr.array[aIndex+3] = 0;
+    }
     attr.needsUpdate = true;
     return true;
   }
@@ -367,9 +375,10 @@ function spawnHazard(sideSign){
     if (idx===undefined) continue;
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
     const spin = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.4,1.5,Math.random());
-    const driftAmp = 0;
-    const driftOmega = 0;
-    const driftPhase = 0;
+    let driftAmp = 0, driftOmega = 0, driftPhase = 0;
+    if (DRIFT_ENABLED){
+      // Platzhalter für zukünftige Hazard-Drifts
+    }
     const prevDot = _v3.subVectors(_v1, iPos).dot(iForward);
     hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase });
     _m1.makeTranslation(_v1.x,_v1.y,_v1.z);
@@ -378,9 +387,15 @@ function spawnHazard(sideSign){
     const attr = getHazardAttribute();
     const aIndex = idx*4;
     attr.array[aIndex+0] = spin;
-    attr.array[aIndex+1] = 0;
-    attr.array[aIndex+2] = 0;
-    attr.array[aIndex+3] = 0;
+    if (DRIFT_ENABLED){
+      attr.array[aIndex+1] = driftAmp;
+      attr.array[aIndex+2] = driftOmega;
+      attr.array[aIndex+3] = driftPhase;
+    }else{
+      attr.array[aIndex+1] = 0;
+      attr.array[aIndex+2] = 0;
+      attr.array[aIndex+3] = 0;
+    }
     attr.needsUpdate = true;
     return _v1.clone();
   }
@@ -664,7 +679,7 @@ function loop(){
   for (let i=balls.length-1;i>=0;i--){
     const b=balls[i]; if(!b.alive){ balls.splice(i,1); continue; }
     b.basePos.addScaledVector(b.velocity, dt);
-    if (b.driftAmp>0 && b.driftOmega>0){
+    if (DRIFT_ENABLED && b.driftAmp>0 && b.driftOmega>0){
       b.t+=dt; const lat=b.driftAmp*Math.sin(b.driftOmega*b.t+b.driftPhase);
       const axisVec = (b.driftAxisIdx===1) ? iUp : iRight;
       b.position.copy(b.basePos).addScaledVector(axisVec, lat);
