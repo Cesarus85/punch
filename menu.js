@@ -20,7 +20,6 @@ function drawTitle(mesh, text) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle = '#ffffff';
-  // Auto-fit: max 110px, min 60px
   let size = 110;
   while (size >= 60) {
     ctx.font = `bold ${size}px system-ui, Arial`;
@@ -50,12 +49,9 @@ function drawButton(btn) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  // Grundfläche + klare Statusfarben (kein „Blinken“)
-  const base = disabled ? '#444c' : '#222c';
-  ctx.fillStyle = base;
+  ctx.fillStyle = disabled ? '#444c' : '#222c';
   ctx.fillRect(0,0,W,H);
 
-  // „selected“ = dezente blaue Fläche, „hover“ = weißer Rahmen
   if (selected && !disabled) {
     ctx.fillStyle = '#1e88e5aa';
     ctx.fillRect(0,0,W,H);
@@ -89,7 +85,7 @@ export function createMenu(diffLabels, speedLabels) {
   const panel = makePanelBG(1.46, 1.06);
   group.add(panel);
 
-  // Titel (eigener Canvas, auto-fit)
+  // Titel
   const title = makeCanvasPlane(1.36, 0.16);
   title.userData.kind = 'title';
   drawTitle(title, 'Spieleinstellungen');
@@ -116,12 +112,12 @@ export function createMenu(diffLabels, speedLabels) {
   const restartBtn = makeButton('Neu starten',0.66, 0.14); restartBtn.userData.kind = 'restart';
   const quitBtn    = makeButton('Beenden',    1.36, 0.14); quitBtn.userData.kind = 'quit';
 
-  // Layout großzügig
+  // Layout
   const rowY_diff  = 0.18;
   const rowY_speed = -0.02;
-  const rowY_ctrl1 = -0.26; // resume/restart (ingame)
-  const rowY_ctrl2 = -0.42; // start (prestart)
-  const rowY_ctrl3 = -0.58; // quit (immer)
+  const rowY_ctrl1 = -0.26;
+  const rowY_ctrl2 = -0.42;
+  const rowY_ctrl3 = -0.58;
   const positionsX = [-0.48, 0, 0.48];
 
   diffButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_diff,  0.001); group.add(b); });
@@ -133,24 +129,22 @@ export function createMenu(diffLabels, speedLabels) {
   quitBtn.position.set(0, rowY_ctrl3, 0.001);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
-  // Auswahlzustand: genau 1 pro Gruppe
+  // Auswahlzustand
   let selDiff = 0, selSpeed = 1;
   diffButtons[selDiff].userData.selected = true; drawButton(diffButtons[selDiff]);
   speedButtons[selSpeed].userData.selected = true; drawButton(speedButtons[selSpeed]);
 
-  // Sichtbarkeitsmodus
+  // Modus: 'prestart' | 'ingame'
   let mode = 'prestart';
   function setMode(m) {
     mode = m;
     const pre = (mode === 'prestart');
 
-    // Sichtbar/Unsichtbar (nicht nur disabled), damit genau die geforderten Buttons da sind
     startBtn.visible   = pre;
     resumeBtn.visible  = !pre;
     restartBtn.visible = !pre;
     quitBtn.visible    = true;
 
-    // disabled flags beachten (rein kosmetisch)
     startBtn.userData.disabled   = !pre;  drawButton(startBtn);
     resumeBtn.userData.disabled  = pre;   drawButton(resumeBtn);
     restartBtn.userData.disabled = pre;   drawButton(restartBtn);
@@ -158,7 +152,7 @@ export function createMenu(diffLabels, speedLabels) {
   }
   setMode('prestart');
 
-  // Hover-Verwaltung (zentral, kein Flackern)
+  // Hover-Verwaltung (zentral, stabil)
   let hoveredBtn = null;
   function clearHover() {
     if (hoveredBtn) { hoveredBtn.userData.hover = false; drawButton(hoveredBtn); hoveredBtn = null; }
@@ -170,7 +164,6 @@ export function createMenu(diffLabels, speedLabels) {
     if (hoveredBtn) { hoveredBtn.userData.hover = true; drawButton(hoveredBtn); }
   }
 
-  // API
   function setVisible(v) { group.visible = v; if (!v) clearHover(); }
   function placeAt(pos, forward) {
     const target = new THREE.Vector3().copy(pos).add(forward);
@@ -178,7 +171,6 @@ export function createMenu(diffLabels, speedLabels) {
     group.lookAt(target);
   }
 
-  // Aktive Ziele je Modus: Panel + sichtbare Buttons
   function getRayTargets() {
     const visibles = [ ...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn ]
       .filter(o => o.visible);
