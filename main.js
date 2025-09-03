@@ -19,14 +19,10 @@ import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js';
 
 /* =========================================================
-   Renderer – ressourcenschonend
+   Renderer
 ========================================================= */
 const renderer = new THREE.WebGLRenderer({
-  alpha: true,
-  antialias: false,
-  powerPreference: 'high-performance',
-  stencil: false,
-  depth: true
+  alpha: true, antialias: false, powerPreference: 'high-performance', stencil: false, depth: true
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -48,7 +44,7 @@ renderer.xr.addEventListener('sessionstart', ()=>{
 });
 
 /* =========================================================
-   Initiale Blickrichtung „einfrieren“
+   Initialpose (fixe Blickrichtung)
 ========================================================= */
 let poseLocked = false;
 const iPos = new THREE.Vector3(), iQuat = new THREE.Quaternion();
@@ -76,7 +72,7 @@ function lockInitialPose(){
 renderer.xr.addEventListener('sessionstart', ()=>{ poseLocked=false; });
 
 /* =========================================================
-   HUD + Back-to-Menu Button (World-Space unter HUD)
+   HUD + Back-to-Menu Button
 ========================================================= */
 const hud = createHUD(scene);
 hud.plane.renderOrder = 10;
@@ -127,7 +123,7 @@ function placeBackButton(){
 }
 
 /* =========================================================
-   Fäuste (Controller/Hände) + Haptik
+   Fäuste & Haptik
 ========================================================= */
 const fistsMgr = new FistsManager(renderer, scene, { showControllerModels:true, sphereVisRadius:0.03 });
 function rumble(intensity=0.8, durationMs=60){
@@ -156,7 +152,7 @@ const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
 const WIDE_EXT_M = 0.20, DEEP_EXT_M = 0.20;
 const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,deep:0.12}, 'Profi':{wide:0.22,deep:0.22} };
 
-// Vertikale S-Kurve: sanfter Downtrend (Bias)
+// Vertikale S (Downtrend)
 const VDRIFT_BIAS_MIN = 0.05, VDRIFT_BIAS_MAX = 0.15;
 
 const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS);
@@ -164,7 +160,7 @@ menu.group.visible = false;
 scene.add(menu.group);
 
 /* =========================================================
-   Countdown (nur neu zeichnen bei Zahlwechsel)
+   Countdown
 ========================================================= */
 let countdown = { active:false, time:0, plane:null, ctx:null, tex:null, lastDrawn:-1 };
 function ensureCountdownPlane(){
@@ -232,7 +228,7 @@ const DDA_CFG = {
   straightMin: 0.15,
   straightMax: 1.00,
   hazMin: 0.05,
-  hazMax: 0.55,          // erhöht
+  hazMax: 0.55,          // erlaubt mehr Hazards
   goodAcc: 0.90,
   badAcc:  0.70,
   minEvents: 8
@@ -260,7 +256,7 @@ function applyGamePreset(diffName, speedName, timeLabel){
   tuning.ballSpeed   = BALL_SPEED   * sMul;
   tuning.hazardSpeed = HAZARD_SPEED * sMul;
 
-  // Startwert Hazards je Schwierigkeit etwas boosten
+  // Startwert Hazards je Schwierigkeit boosten
   const diffBoost = diffName==='Profi' ? 1.25 : (diffName==='Aufsteiger' ? 1.10 : 1.00);
   tuning.hazardProb  = clamp(baseHazardProb * diffBoost, DDA_CFG.hazMin, DDA_CFG.hazMax);
 
@@ -287,15 +283,12 @@ function comboMultiplier(){ if (streak<=0) return 1; const m=1+Math.floor(streak
 function updateHUD(note=''){ hud.set({ hits, misses, score, streak, mode:gameMode, timeLeft, best:null, note }); }
 
 /* =========================================================
-   Debug-Ring (optional, wiederverwendet)
+   Debug-Ring (optional)
 ========================================================= */
 let _debugRing=null, _debugRingTimer=0;
 function ensureDebugRing(){
   if (_debugRing || !DEBUG_HAZARD_RING_MS) return;
-  _debugRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.12,0.012,8,24),
-    new THREE.MeshBasicMaterial({ color:0xffffff })
-  );
+  _debugRing = new THREE.Mesh(new THREE.TorusGeometry(0.12,0.012,8,24), new THREE.MeshBasicMaterial({ color:0xffffff }));
   scene.add(_debugRing);
   _debugRing.visible = false;
 }
@@ -310,52 +303,41 @@ function flashSpawnRingAt(pos){
 }
 
 /* =========================================================
-   Object Pooling (Balls/Hazards)
+   Pooling
 ========================================================= */
 const ballPool = [];
 const hazardPool = [];
 const MAX_POOL_BALLS = 64;
 const MAX_POOL_HAZ   = 32;
-
 function getPooledBall(){ return ballPool.pop() || makeBall(); }
-function recycleBall(mesh){
-  if (!mesh) return;
-  mesh.visible = false;
-  mesh.position.set(0,-999,0);
-  if (ballPool.length < MAX_POOL_BALLS) ballPool.push(mesh);
-}
+function recycleBall(mesh){ if (!mesh) return; mesh.visible=false; mesh.position.set(0,-999,0); if (ballPool.length<MAX_POOL_BALLS) ballPool.push(mesh); }
 function getPooledHazard(){ return hazardPool.pop() || createHazard(); }
-function recycleHazard(mesh){
-  if (!mesh) return;
-  mesh.visible = false;
-  mesh.position.set(0,-999,0);
-  if (hazardPool.length < MAX_POOL_HAZ) hazardPool.push(mesh);
-}
+function recycleHazard(mesh){ if (!mesh) return; mesh.visible=false; mesh.position.set(0,-999,0); if (hazardPool.length<MAX_POOL_HAZ) hazardPool.push(mesh); }
 
 /* =========================================================
-   Spawn-Koordinator (Mindestabstände & zeitliche Entkopplung)
+   Spawn-Koordinator (Abstand/TTL), gelockert
 ========================================================= */
-// gelockerte Werte für höhere Hazard-Rate
-const MIN_SPAWN_SEP = BALL_RADIUS + HAZARD_RADIUS + 0.08; // ~8 cm Puffer
-const RECENT_SPAWN_TTL = 0.70;     // Reservierungen verfallen schneller
-const HAZARD_SPAWN_DELAY = 0.12;   // Hazards schneller nachschieben
-const HAZARD_MIN_GAP = 0.14;       // kleiner Mindestzeitabstand
-const MAX_HAZARDS_PER_TICK = 2;    // mehrere aus Queue pro Frame möglich
+const MIN_SPAWN_SEP   = BALL_RADIUS + HAZARD_RADIUS + 0.08; // ~8 cm Extra
+const RECENT_SPAWN_TTL= 0.50; // Reservierungen gelten 0.5 s
+const HAZARD_SPAWN_DELAY = 0.12; // Hazard kommt leicht zeitversetzt
+const MAX_HAZARDS_PER_TICK = 2;  // bis zu 2 aus Queue/Frame
+
+// NEU: unabhängiger Hazard-Versuchs-Takt
+const HAZARD_ATTEMPT_PERIOD = 0.50; // alle 0.5 s einen Versuch (mit Prob tuning.hazardProb)
 
 let nowTime = 0;
-let lastAnySpawnTime = -999;
 let recentSpawns = [];            // { pos: THREE.Vector3, time: number }
 let hazardQueue = [];             // { side: -1|+1, dueTime: number, retries: number }
+let hazardAttemptTimer = 0;
 
 function registerRecentSpawn(pos){
   recentSpawns.push({ pos: pos.clone(), time: nowTime });
-  lastAnySpawnTime = nowTime;
 }
 function cleanupRecentSpawns(){
   const ttl = RECENT_SPAWN_TTL;
   recentSpawns = recentSpawns.filter(e => (nowTime - e.time) <= ttl);
 }
-// suche eine kollisionsfreie Spawnposition nahe candidate
+// Versuche kollisionsfreie Position nahe candidate
 function resolveNonOverlappingPos(candidate){
   const out = candidate.clone();
   for (let attempt=0; attempt<3; attempt++){
@@ -374,11 +356,11 @@ function resolveNonOverlappingPos(candidate){
     }
     if (!hit) return out;
   }
-  return null; // heute auslassen/verschieben
+  return null;
 }
 
 /* =========================================================
-   Spawner
+   Spawner (Balls/Hazards)
 ========================================================= */
 const MAX_ACTIVE_BODIES = 40;
 function randRange(a,b){ return a + Math.random()*(b-a); }
@@ -402,9 +384,8 @@ function spawnBall(sideSign,{style='auto'}={}){
      .addScaledVector(iRight, sideMag*sideSign)
      .addScaledVector(iUp, heightOffset);
 
-  // Kollisionsfreie Position finden
   const resolved = resolveNonOverlappingPos(_v1);
-  if (!resolved) return; // hebe diesen Schritt auf (kein Spawn)
+  if (!resolved) return;
 
   const obj = getPooledBall();
   obj.visible = true;
@@ -422,7 +403,7 @@ function spawnBall(sideSign,{style='auto'}={}){
 
   const prevDot = _v4.subVectors(obj.position, iPos).dot(iForward);
 
-  // Drift-Setup je nach gewünschtem Stil
+  // Drift-Setup je Stil
   let driftAmp=0, driftOmega=0, driftPhase=0, driftAxisIdx=0, driftBiasRate=0;
   const explicitStraight = (style==='straight');
   const explicitSH = (style==='s-h');
@@ -453,20 +434,33 @@ function spawnBall(sideSign,{style='auto'}={}){
     driftAxisIdx, driftBiasRate, prevDrift:0
   });
 
-  // Spawn reservieren
   registerRecentSpawn(obj.position);
 }
 
 function spawnHazard(sideSign){
   if (!poseLocked) return null;
-  const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
-  const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
-  _v1.copy(iPos)
-     .addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS))
-     .addScaledVector(iRight, sideMag*sideSign)
-     .addScaledVector(iUp, heightOffset);
 
-  const resolved = resolveNonOverlappingPos(_v1);
+  function calcPos(sgn, yJitter=0){
+    const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
+    const heightOffset = -Math.random() * SPAWN_MAX_BELOW + yJitter;
+    return _v1.copy(iPos)
+      .addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS))
+      .addScaledVector(iRight, sideMag*sgn)
+      .addScaledVector(iUp, heightOffset)
+      .clone();
+  }
+
+  // bis zu 3 Versuche: Seite A, Seite B, leichte Höhenvariante
+  let candidate = calcPos(sideSign, 0);
+  let resolved = resolveNonOverlappingPos(candidate);
+  if (!resolved){
+    candidate = calcPos(-sideSign, 0);
+    resolved = resolveNonOverlappingPos(candidate);
+  }
+  if (!resolved){
+    candidate = calcPos(sideSign, (Math.random()<0.5 ? 0.10 : -0.10));
+    resolved = resolveNonOverlappingPos(candidate);
+  }
   if (!resolved) return null;
 
   const obj = getPooledHazard();
@@ -483,10 +477,10 @@ function spawnHazard(sideSign){
 }
 
 /* =========================================================
-   Hazard trifft Körper (Körperkapsel)
+   Körperkapsel & Events
 ========================================================= */
-const BODY_CAPSULE_HEIGHT = 1.10; // Meter
-const BODY_CAPSULE_RADIUS = 0.28; // Meter
+const BODY_CAPSULE_HEIGHT = 1.10;
+const BODY_CAPSULE_RADIUS = 0.28;
 const _bpHead = new THREE.Vector3(), _bpHip  = new THREE.Vector3();
 const _bpAB   = new THREE.Vector3(), _bpAP   = new THREE.Vector3();
 const _bpClosest = new THREE.Vector3(), _bpTmp  = new THREE.Vector3();
@@ -504,38 +498,22 @@ function hazardHitsBody(point){
   return dist <= (HAZARD_RADIUS + BODY_CAPSULE_RADIUS);
 }
 
-/* =========================================================
-   Events
-========================================================= */
 let _lastHitAt = 0;
 function onBallHit(b){
-  b.alive=false;
-  scene.remove(b.obj);
-  recycleBall(b.obj);
+  b.alive=false; scene.remove(b.obj); recycleBall(b.obj);
   hits++; streak++; score+=comboMultiplier();
   const now = performance.now();
   if (AUDIO_ENABLED && now - _lastHitAt > 40) { hitSound(); _lastHitAt = now; }
-  rumble(0.9,60);
-  updateHUD();
+  rumble(0.9,60); updateHUD();
 }
 function onBallMiss(b){
-  b.alive=false;
-  scene.remove(b.obj);
-  recycleBall(b.obj);
-  misses++; streak=0;
-  if (AUDIO_ENABLED) missSound();
-  rumble(0.25,40);
-  updateHUD();
+  b.alive=false; scene.remove(b.obj); recycleBall(b.obj);
+  misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40); updateHUD();
 }
 function onHazardHit(h){
-  h.alive=false;
-  scene.remove(h.obj);
-  recycleHazard(h.obj);
-  hazardHits++;
-  streak=0; score=Math.max(0, score-HAZARD_PENALTY);
-  if (AUDIO_ENABLED) penaltySound();
-  rumble(1.0,80);
-  updateHUD();
+  h.alive=false; scene.remove(h.obj); recycleHazard(h.obj);
+  hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
+  if (AUDIO_ENABLED) penaltySound(); rumble(1.0,80); updateHUD();
 }
 
 /* =========================================================
@@ -573,54 +551,38 @@ function clearActiveObjectsKeepScore(){
 }
 
 /* =========================================================
-   Controller Rays (Menü & Back-Button)
+   Controller Rays & Menü
 ========================================================= */
 const raycaster = new THREE.Raycaster();
 const controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
 const lasers = [];
 function makeLaser(){
-  const baseLen=2.0;
-  const geo=new THREE.CylinderGeometry(0.005,0.005,baseLen,12);
+  const baseLen=2.0, geo=new THREE.CylinderGeometry(0.005,0.005,baseLen,12);
   const mat=new THREE.MeshBasicMaterial({ color:0x00e5ff, transparent:true, opacity:0.95, depthTest:false });
-  const m=new THREE.Mesh(geo,mat);
-  m.rotation.x=Math.PI/2; m.position.z=-(baseLen/2);
-  m.userData.baseLen=baseLen; m.visible=false;
-  return m;
+  const m=new THREE.Mesh(geo,mat); m.rotation.x=Math.PI/2; m.position.z=-(baseLen/2);
+  m.userData.baseLen=baseLen; m.visible=false; return m;
 }
 function setLaserDistance(laser, dist){
-  const base=laser.userData.baseLen;
-  const d=Math.max(0.05, Math.min(dist, base));
-  laser.scale.set(1, d/base, 1);
-  laser.position.z = -(d/2);
+  const base=laser.userData.baseLen, d=Math.max(0.05, Math.min(dist, base));
+  laser.scale.set(1, d/base, 1); laser.position.z = -(d/2);
 }
 function setLasersVisible(v){ lasers.forEach(l=>l.visible=v); }
 
 for (const c of controllers){
-  scene.add(c);
-  const laser = makeLaser(); c.add(laser); lasers.push(laser);
-
+  scene.add(c); const laser = makeLaser(); c.add(laser); lasers.push(laser);
   c.addEventListener('selectstart', ()=>{
-    // 1) Back-to-Menu Button?
     if (backBtn.visible){
       const hit = intersectMesh(c, backBtn);
       if (hit){
-        hideBackToMenuButton();
-        hud.plane.visible = false;   // HUD aus, wenn Menü aufgeht
-        menu.placeAt(iPos, iForward);
-        menu.setMode('prestart');
-        menu.setVisible(true);
-        setLasersVisible(true);
-        game.menuActive = true;
-        return;
+        hideBackToMenuButton(); hud.plane.visible = false;
+        menu.placeAt(iPos, iForward); menu.setMode('prestart'); menu.setVisible(true); setLasersVisible(true);
+        game.menuActive = true; return;
       }
     }
-    // 2) Menü?
     if (!game.menuActive) return;
-    const hit = intersectHitPlane(c);
-    if (!hit) return;
+    const hit = intersectHitPlane(c); if (!hit) return;
     const btn = menu.pickButtonAtWorldPoint(hit.point);
-    const action = menu.click(btn);
-    if (!action) return;
+    const action = menu.click(btn); if (!action) return;
     if (action.action==='start'){ beginCountdown(); }
     else if (action.action==='resume'){ closeMenuResume(); }
     else if (action.action==='restart'){ beginCountdown(); }
@@ -629,57 +591,39 @@ for (const c of controllers){
 }
 function intersectHitPlane(controller){
   const origin=_v6.set(0,0,0), dir=_v7.set(0,0,-1);
-  controller.getWorldPosition(origin);
-  dir.applyQuaternion(controller.quaternion).normalize();
-  raycaster.set(origin, dir);
-  return raycaster.intersectObject(menu.hitPlane, false)[0] || null;
+  controller.getWorldPosition(origin); dir.applyQuaternion(controller.quaternion).normalize();
+  raycaster.set(origin, dir); return raycaster.intersectObject(menu.hitPlane, false)[0] || null;
 }
 function intersectMesh(controller, mesh){
   const origin=_v6.set(0,0,0), dir=_v7.set(0,0,-1);
-  controller.getWorldPosition(origin);
-  dir.applyQuaternion(controller.quaternion).normalize();
-  raycaster.set(origin, dir);
-  return raycaster.intersectObject(mesh, false)[0] || null;
+  controller.getWorldPosition(origin); dir.applyQuaternion(controller.quaternion).normalize();
+  raycaster.set(origin, dir); return raycaster.intersectObject(mesh, false)[0] || null;
 }
 
 /* =========================================================
-   A/X Toggling (Pause/Resume)
+   A/X Pause/Resume
 ========================================================= */
 function isRisingEdgeAX(gp, key, store){
   if (!gp || !gp.buttons) return false;
   const pressed = !!(gp.buttons[3]?.pressed) || !!(gp.buttons[4]?.pressed);
-  const prev = !!store[key]; store[key]=pressed;
-  return pressed && !prev;
+  const prev = !!store[key]; store[key]=pressed; return pressed && !prev;
 }
 let _pausedSpawnTimer = 0;
 function openMenuIngame(){
-  game.running=false; hud.plane.visible=false;
-  _pausedSpawnTimer = spawnTimer;
-  clearActiveObjectsKeepScore();
-  hideBackToMenuButton();
-  menu.placeAt(iPos, iForward);
-  menu.setMode('ingame');
-  menu.setVisible(true); setLasersVisible(true);
-  game.menuActive=true;
+  game.running=false; hud.plane.visible=false; _pausedSpawnTimer = spawnTimer;
+  clearActiveObjectsKeepScore(); hideBackToMenuButton();
+  menu.placeAt(iPos, iForward); menu.setMode('ingame'); menu.setVisible(true); setLasersVisible(true); game.menuActive=true;
 }
 function closeMenuResume(){
   menu.setVisible(false); setLasersVisible(false);
-  game.menuActive=false; game.running=true; hud.plane.visible=true;
-  hideBackToMenuButton();
+  game.menuActive=false; game.running=true; hud.plane.visible=true; hideBackToMenuButton();
   spawnTimer = _pausedSpawnTimer;
 }
 function showBackToMenuButton(){
-  backBtn.visible = true;
-  placeBackButton();     // sofort korrekt platzieren
-  setLasersVisible(true);
-  menu.setVisible(false);
-  game.menuActive = false;
-  hud.plane.visible = true;
+  backBtn.visible = true; placeBackButton(); setLasersVisible(true);
+  menu.setVisible(false); game.menuActive = false; hud.plane.visible = true;
 }
-function hideBackToMenuButton(){
-  backBtn.visible = false;
-  backBtn.userData.hover = false; drawUIButton(backBtn);
-}
+function hideBackToMenuButton(){ backBtn.visible = false; backBtn.userData.hover = false; drawUIButton(backBtn); }
 
 /* =========================================================
    Loop
@@ -687,18 +631,12 @@ function hideBackToMenuButton(){
 const clock = new THREE.Clock();
 let spawnTimer=0;
 
-// temporäre Vektoren (GC vermeiden)
-const _v1 = new THREE.Vector3();
-const _v2 = new THREE.Vector3();
-const _v3 = new THREE.Vector3();
-const _v4 = new THREE.Vector3();
-const _v5 = new THREE.Vector3();
-const _v6 = new THREE.Vector3();
-const _v7 = new THREE.Vector3();
+// Temps
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3(), _v6 = new THREE.Vector3(), _v7 = new THREE.Vector3();
 
-/* ---- Pattern-Engine State ---- */
-let curPattern = null;
-let curStepIdx = 0;
+/* Pattern-State */
+let curPattern = null, curStepIdx = 0;
 function ensurePattern(){
   if (!curPattern || curStepIdx >= curPattern.steps.length){
     curPattern = pickPattern(currentDiffName);
@@ -708,10 +646,10 @@ function ensurePattern(){
 
 function loop(){
   const dt = clock.getDelta();
-  nowTime += dt;                 // Zeit für Koordinator
-  cleanupRecentSpawns();         // Reservierungen entmüllen
+  nowTime += dt;
+  cleanupRecentSpawns();
 
-  // A/X Face-Buttons
+  // A/X
   const session = renderer.xr.getSession?.();
   if (session){
     if (!loop._btnPrev) loop._btnPrev = {};
@@ -724,46 +662,34 @@ function loop(){
     }
   }
 
-  if (renderer.xr.isPresenting && !poseLocked){
-    lockInitialPose();
-    updateHUD('Konfigurieren & Starten');
-  }
+  if (renderer.xr.isPresenting && !poseLocked){ lockInitialPose(); updateHUD('Konfigurieren & Starten'); }
 
-  // Menü / Back-Button Hover + Laser
+  // Menü-Hover/Laser
   if (game.menuActive){
     let bestHit=null;
     for (let i=0;i<controllers.length;i++){
-      const c=controllers[i];
-      const hit = intersectHitPlane(c);
-      if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true;
-        if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; }
-      } else { lasers[i].visible=false; }
+      const c=controllers[i]; const hit = intersectHitPlane(c);
+      if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true; if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; } }
+      else { lasers[i].visible=false; }
     }
     menu.setHover(bestHit ? menu.pickButtonAtWorldPoint(bestHit.point) : null);
   } else if (backBtn.visible){
     placeBackButton();
     let bestHit=null;
     for (let i=0;i<controllers.length;i++){
-      const c=controllers[i];
-      const hit = intersectMesh(c, backBtn);
-      if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true;
-        if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; }
-      } else { lasers[i].visible=false; }
+      const c=controllers[i]; const hit = intersectMesh(c, backBtn);
+      if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true; if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; } }
+      else { lasers[i].visible=false; }
     }
-    backBtn.userData.hover = !!bestHit;
-    drawUIButton(backBtn);
-  } else {
-    setLasersVisible(false);
-  }
+    backBtn.userData.hover = !!bestHit; drawUIButton(backBtn);
+  } else { setLasersVisible(false); }
 
   // Countdown
   if (countdown.active){
     countdown.time -= dt; const n=Math.max(0,Math.ceil(countdown.time));
     drawCountdown(n); placeCountdown();
-    if (countdown.time<=0){
-      countdown.active=false; countdown.plane.visible=false;
-      hud.plane.visible=true; game.running=true; updateHUD('');
-    } else { countdown.plane.visible=true; }
+    if (countdown.time<=0){ countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true; updateHUD(''); }
+    else { countdown.plane.visible=true; }
   }
 
   const fists = fistsMgr.update(dt);
@@ -773,15 +699,12 @@ function loop(){
   if (game.running && timeLeft!=null){
     timeLeft -= dt;
     if (timeLeft <= 0){
-      timeLeft = 0;
-      canSpawn = false;
-      game.running = false;
-      clearActiveObjectsKeepScore();
-      showBackToMenuButton(); // nur HUD + Button, kein Menü
+      timeLeft = 0; canSpawn = false; game.running = false;
+      clearActiveObjectsKeepScore(); showBackToMenuButton();
     }
   }
 
-  /* ---------- DDA: alle 12s justieren ---------- */
+  /* ---------- DDA ---------- */
   if (DDA_CFG.enabled && !game.menuActive){
     ddaTimer += dt;
     if (ddaTimer >= DDA_CFG.interval){
@@ -795,18 +718,18 @@ function loop(){
         if (acc >= DDA_CFG.goodAcc && dHaz <= 1){
           tuning.spawnInterval = clamp(tuning.spawnInterval * 0.92, baseSpawnInterval*DDA_CFG.spawnMinMul, baseSpawnInterval*DDA_CFG.spawnMaxMul);
           tuning.straightShare = clamp(tuning.straightShare * 0.92, DDA_CFG.straightMin, DDA_CFG.straightMax);
-          tuning.hazardProb    = clamp(tuning.hazardProb + 0.03, DDA_CFG.hazMin, DDA_CFG.hazMax); // schneller anheben
+          tuning.hazardProb    = clamp(tuning.hazardProb + 0.03, DDA_CFG.hazMin, DDA_CFG.hazMax);
         } else if (acc <= DDA_CFG.badAcc || dHaz >= 2){
           tuning.spawnInterval = clamp(tuning.spawnInterval * 1.08, baseSpawnInterval*DDA_CFG.spawnMinMul, baseSpawnInterval*DDA_CFG.spawnMaxMul);
           tuning.straightShare = clamp(tuning.straightShare * 1.06, DDA_CFG.straightMin, DDA_CFG.straightMax);
-          tuning.hazardProb    = clamp(tuning.hazardProb - 0.03, DDA_CFG.hazMin, DDA_CFG.hazMax); // deutlicher absenken
+          tuning.hazardProb    = clamp(tuning.hazardProb - 0.03, DDA_CFG.hazMin, DDA_CFG.hazMax);
         }
       }
       lastDdaHits = hits; lastDdaMisses = misses; lastDdaHazHits = hazardHits; ddaTimer = 0;
     }
   }
 
-  /* ---------- Hazard-Queue abarbeiten (vor regulärem Spawner) ---------- */
+  /* ---------- Hazard-Queue (abgekoppelt vom Ball-Tick) ---------- */
   if (canSpawn && hazardQueue.length && (balls.length + hazards.length) < MAX_ACTIVE_BODIES){
     let processed = 0;
     while (processed < MAX_HAZARDS_PER_TICK &&
@@ -825,18 +748,30 @@ function loop(){
           head.retries -= 1;
           head.dueTime = nowTime + 0.12; // kurzer weiterer Offset
         } else {
-          hazardQueue.shift(); // aufgeben
+          hazardQueue.shift();
         }
       }
     }
   }
 
-  // Spawner mit Budget: Pattern-Schritt
+  // NEU: periodisch Hazard-Versuch planen (unabhängig vom Ball-Spawner)
+  hazardAttemptTimer += dt;
+  while (canSpawn && hazardAttemptTimer >= HAZARD_ATTEMPT_PERIOD &&
+         (balls.length + hazards.length + hazardQueue.length) < MAX_ACTIVE_BODIES){
+    hazardAttemptTimer -= HAZARD_ATTEMPT_PERIOD;
+    if (HAZARD_ENABLED && Math.random() < tuning.hazardProb){
+      hazardQueue.push({
+        side: (Math.random()<0.5 ? -1 : +1),
+        dueTime: nowTime + HAZARD_SPAWN_DELAY,
+        retries: 2
+      });
+    }
+  }
+
+  /* ---------- Ball-Spawner: Pattern-Schritt ---------- */
   spawnTimer += dt;
   if (canSpawn && (balls.length + hazards.length) < MAX_ACTIVE_BODIES && spawnTimer >= tuning.spawnInterval){
     spawnTimer = 0;
-
-    // 1) Balls nach Pattern
     ensurePattern();
     const step = curPattern.steps[curStepIdx++];
     if (step && step.items){
@@ -847,24 +782,10 @@ function loop(){
         budget--;
       }
     }
-
-    // 2) Hazard ggf. zusätzlich – geplant (Min-Gap + Delay)
-    if (HAZARD_ENABLED && Math.random()<tuning.hazardProb){
-      if ((nowTime - lastAnySpawnTime) >= HAZARD_MIN_GAP){
-        hazardQueue.push({
-          side: (Math.random()<0.5 ? -1 : +1),
-          dueTime: nowTime + HAZARD_SPAWN_DELAY,
-          retries: 2
-        });
-      }
-    }
   }
 
   // Debug-Ring-Timer
-  if (_debugRing && _debugRing.visible){
-    _debugRingTimer -= dt;
-    if (_debugRingTimer <= 0){ _debugRing.visible = false; }
-  }
+  if (_debugRing && _debugRing.visible){ _debugRingTimer -= dt; if (_debugRingTimer <= 0){ _debugRing.visible = false; } }
 
   // Balls – Update
   for (let i=balls.length-1;i>=0;i--){
@@ -878,10 +799,7 @@ function loop(){
       const axisVec = (b.driftAxisIdx===1) ? iUp : iRight;
       b.obj.position.addScaledVector(axisVec, d);
       b.prevDrift=lat;
-
-      if (b.driftAxisIdx===1 && b.driftBiasRate>0){
-        b.obj.position.addScaledVector(iUp, -b.driftBiasRate*dt);
-      }
+      if (b.driftAxisIdx===1 && b.driftBiasRate>0){ b.obj.position.addScaledVector(iUp, -b.driftBiasRate*dt); }
     }
     if (b.spin && b.spinAxis) b.obj.rotateOnAxis(b.spinAxis, b.spinSpeed*dt);
 
