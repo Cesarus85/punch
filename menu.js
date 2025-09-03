@@ -1,17 +1,46 @@
-// Menü-Overlay mit eindeutiger Hover-Steuerung und größerem Layout
+// Menü-Overlay mit stabiler Hover-Selektion & dynamischer Titelgröße
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 
-function makeButton(label, w=0.40, h=0.14) {
+function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');
-  canvas.width = 640; canvas.height = 256;
+  canvas.width = 1024; canvas.height = 256;
   const ctx = canvas.getContext('2d');
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
-
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite:false });
   const geo = new THREE.PlaneGeometry(w, h);
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { label, w, h, selected:false, hover:false, kind:null, index:-1, _ctx:ctx, _tex:tex, disabled:false };
+  mesh.userData._ctx = ctx;
+  mesh.userData._tex = tex;
+  return mesh;
+}
+
+function drawTitle(mesh, text) {
+  const ctx = mesh.userData._ctx, tex = mesh.userData._tex;
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#ffffff';
+  // Auto-fit: max 110px, min 60px
+  let size = 110;
+  while (size >= 60) {
+    ctx.font = `bold ${size}px system-ui, Arial`;
+    const tw = ctx.measureText(text).width;
+    if (tw <= W - 80) break;
+    size -= 4;
+  }
+  const tw = ctx.measureText(text).width;
+  ctx.fillText(text, (W - tw)/2, H*0.70);
+  tex.needsUpdate = true;
+}
+
+function makeButton(label, w=0.42, h=0.14) {
+  const mesh = makeCanvasPlane(w, h);
+  mesh.userData.label = label;
+  mesh.userData.kind = null;
+  mesh.userData.index = -1;
+  mesh.userData.selected = false;
+  mesh.userData.hover = false;
+  mesh.userData.disabled = false;
   drawButton(mesh);
   return mesh;
 }
@@ -21,11 +50,18 @@ function drawButton(btn) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  ctx.fillStyle = disabled ? '#444c' : (selected ? '#1e88e5' : '#222c');
+  // Grundfläche + klare Statusfarben (kein „Blinken“)
+  const base = disabled ? '#444c' : '#222c';
+  ctx.fillStyle = base;
   ctx.fillRect(0,0,W,H);
 
+  // „selected“ = dezente blaue Fläche, „hover“ = weißer Rahmen
+  if (selected && !disabled) {
+    ctx.fillStyle = '#1e88e5aa';
+    ctx.fillRect(0,0,W,H);
+  }
   if (hover && !disabled) {
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 10;
     ctx.strokeRect(6,6,W-12,H-12);
   }
@@ -38,73 +74,83 @@ function drawButton(btn) {
   tex.needsUpdate = true;
 }
 
-function makePanelBG(w=1.40, h=1.00) {
-  const mat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.62, depthWrite:false });
+function makePanelBG(w=1.46, h=1.06) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.64, depthWrite:false });
   const geo = new THREE.PlaneGeometry(w, h, 1, 1);
-  return new THREE.Mesh(geo, mat);
+  const m = new THREE.Mesh(geo, mat);
+  m.name = 'menuPanel';
+  return m;
 }
 
 export function createMenu(diffLabels, speedLabels) {
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
-  const panel = makePanelBG(1.40, 1.00);
-  panel.name = 'menuPanel';
+  const panel = makePanelBG(1.46, 1.06);
   group.add(panel);
 
-  // Titel
-  const title = makeButton('Spiel-Einstellungen', 1.30, 0.16);
+  // Titel (eigener Canvas, auto-fit)
+  const title = makeCanvasPlane(1.36, 0.16);
   title.userData.kind = 'title';
-  title.position.set(0, 0.36, 0.001);
-  drawButton(title);
+  drawTitle(title, 'Spieleinstellungen');
+  title.position.set(0, 0.40, 0.001);
   group.add(title);
 
-  // Diff/Speed
+  // Schwierigkeits-Gruppen
   const diffButtons = diffLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.40, 0.14);
+    const b = makeButton(lbl, 0.42, 0.14);
     b.userData.kind = 'difficulty';
     b.userData.index = i;
     return b;
   });
   const speedButtons = speedLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.40, 0.14);
+    const b = makeButton(lbl, 0.42, 0.14);
     b.userData.kind = 'speed';
     b.userData.index = i;
     return b;
   });
 
   // Control-Buttons
-  const startBtn   = makeButton('Starten',    1.30, 0.16); startBtn.userData.kind = 'start';
-  const resumeBtn  = makeButton('Fortsetzen', 0.62, 0.14); resumeBtn.userData.kind = 'resume';
-  const restartBtn = makeButton('Neu starten',0.62, 0.14); restartBtn.userData.kind = 'restart';
-  const quitBtn    = makeButton('Beenden',    1.30, 0.14); quitBtn.userData.kind = 'quit';
+  const startBtn   = makeButton('Starten',    1.36, 0.16); startBtn.userData.kind = 'start';
+  const resumeBtn  = makeButton('Fortsetzen', 0.66, 0.14); resumeBtn.userData.kind = 'resume';
+  const restartBtn = makeButton('Neu starten',0.66, 0.14); restartBtn.userData.kind = 'restart';
+  const quitBtn    = makeButton('Beenden',    1.36, 0.14); quitBtn.userData.kind = 'quit';
 
-  // Layout
-  const rowY_diff  = 0.16, rowY_speed = -0.02;
-  const rowY_ctrl1 = -0.24, rowY_ctrl2 = -0.40, rowY_ctrl3 = -0.56;
-  const positionsX = [-0.46, 0, 0.46];
+  // Layout großzügig
+  const rowY_diff  = 0.18;
+  const rowY_speed = -0.02;
+  const rowY_ctrl1 = -0.26; // resume/restart (ingame)
+  const rowY_ctrl2 = -0.42; // start (prestart)
+  const rowY_ctrl3 = -0.58; // quit (immer)
+  const positionsX = [-0.48, 0, 0.48];
 
-  diffButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_diff, 0.001); group.add(b); });
+  diffButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_diff,  0.001); group.add(b); });
   speedButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_speed, 0.001); group.add(b); });
 
-  resumeBtn.position.set(-0.33, rowY_ctrl1, 0.001);
-  restartBtn.position.set(+0.33, rowY_ctrl1, 0.001);
+  resumeBtn.position.set(-0.34, rowY_ctrl1, 0.001);
+  restartBtn.position.set(+0.34, rowY_ctrl1, 0.001);
   startBtn.position.set(0, rowY_ctrl2, 0.001);
   quitBtn.position.set(0, rowY_ctrl3, 0.001);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
-  // Auswahl
+  // Auswahlzustand: genau 1 pro Gruppe
   let selDiff = 0, selSpeed = 1;
   diffButtons[selDiff].userData.selected = true; drawButton(diffButtons[selDiff]);
   speedButtons[selSpeed].userData.selected = true; drawButton(speedButtons[selSpeed]);
 
-  const interactives = [...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn];
-
-  // Modus: 'prestart' | 'ingame'
+  // Sichtbarkeitsmodus
   let mode = 'prestart';
   function setMode(m) {
     mode = m;
     const pre = (mode === 'prestart');
+
+    // Sichtbar/Unsichtbar (nicht nur disabled), damit genau die geforderten Buttons da sind
+    startBtn.visible   = pre;
+    resumeBtn.visible  = !pre;
+    restartBtn.visible = !pre;
+    quitBtn.visible    = true;
+
+    // disabled flags beachten (rein kosmetisch)
     startBtn.userData.disabled   = !pre;  drawButton(startBtn);
     resumeBtn.userData.disabled  = pre;   drawButton(resumeBtn);
     restartBtn.userData.disabled = pre;   drawButton(restartBtn);
@@ -112,7 +158,7 @@ export function createMenu(diffLabels, speedLabels) {
   }
   setMode('prestart');
 
-  // Hover: zentral gesteuert -> genau EIN Button
+  // Hover-Verwaltung (zentral, kein Flackern)
   let hoveredBtn = null;
   function clearHover() {
     if (hoveredBtn) { hoveredBtn.userData.hover = false; drawButton(hoveredBtn); hoveredBtn = null; }
@@ -120,10 +166,11 @@ export function createMenu(diffLabels, speedLabels) {
   function setHover(btn) {
     if (hoveredBtn === btn) return;
     if (hoveredBtn) { hoveredBtn.userData.hover = false; drawButton(hoveredBtn); }
-    hoveredBtn = (btn && !btn.userData.disabled && btn.userData.kind !== 'title') ? btn : null;
+    hoveredBtn = (btn && btn.visible && !btn.userData.disabled && btn.userData.kind !== 'title') ? btn : null;
     if (hoveredBtn) { hoveredBtn.userData.hover = true; drawButton(hoveredBtn); }
   }
 
+  // API
   function setVisible(v) { group.visible = v; if (!v) clearHover(); }
   function placeAt(pos, forward) {
     const target = new THREE.Vector3().copy(pos).add(forward);
@@ -131,10 +178,19 @@ export function createMenu(diffLabels, speedLabels) {
     group.lookAt(target);
   }
 
-  function getRayTargets() { return [panel, ...interactives]; }
+  // Aktive Ziele je Modus: Panel + sichtbare Buttons
+  function getRayTargets() {
+    const visibles = [ ...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn ]
+      .filter(o => o.visible);
+    return [panel, ...visibles];
+  }
+  function getActiveButtons() {
+    return [ ...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn ]
+      .filter(o => o.visible && !o.userData.disabled);
+  }
 
   function click(btn) {
-    if (!btn || btn.userData.disabled) return null;
+    if (!btn || !btn.visible || btn.userData.disabled) return null;
     const { kind, index } = btn.userData;
     if (kind === 'difficulty') {
       diffButtons.forEach(b => { b.userData.selected = false; drawButton(b); });
@@ -153,5 +209,9 @@ export function createMenu(diffLabels, speedLabels) {
 
   function getSelection() { return { difficultyIndex: selDiff, speedIndex: selSpeed }; }
 
-  return { group, panel, interactives, getRayTargets, setVisible, placeAt, setMode, setHover, click, getSelection };
+  return {
+    group, panel,
+    setVisible, placeAt, setMode,
+    getRayTargets, getActiveButtons, setHover, click, getSelection
+  };
 }
