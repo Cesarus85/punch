@@ -367,10 +367,9 @@ function spawnHazard(sideSign){
     if (idx===undefined) continue;
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
     const spin = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.4,1.5,Math.random());
-    const driftAmp = randRange(DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE);
-    const f = randRange(DRIFT_MIN_FREQ, DRIFT_MAX_FREQ);
-    const driftOmega = 2*Math.PI*f;
-    const driftPhase = Math.random()*Math.PI*2;
+    const driftAmp = 0;
+    const driftOmega = 0;
+    const driftPhase = 0;
     const prevDot = _v3.subVectors(_v1, iPos).dot(iForward);
     hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase });
     _m1.makeTranslation(_v1.x,_v1.y,_v1.z);
@@ -379,9 +378,9 @@ function spawnHazard(sideSign){
     const attr = getHazardAttribute();
     const aIndex = idx*4;
     attr.array[aIndex+0] = spin;
-    attr.array[aIndex+1] = driftAmp;
-    attr.array[aIndex+2] = driftOmega;
-    attr.array[aIndex+3] = driftPhase;
+    attr.array[aIndex+1] = 0;
+    attr.array[aIndex+2] = 0;
+    attr.array[aIndex+3] = 0;
     attr.needsUpdate = true;
     return _v1.clone();
   }
@@ -691,12 +690,7 @@ function loop(){
   for (let i=hazards.length-1;i>=0;i--){
     const h=hazards[i]; if(!h.alive){ hazards.splice(i,1); continue; }
     h.basePos.addScaledVector(h.velocity, dt);
-    if (h.driftAmp>0 && h.driftOmega>0){
-      h.t += dt; const lat = h.driftAmp*Math.sin(h.driftOmega*h.t + h.driftPhase);
-      h.position.copy(h.basePos).addScaledVector(iRight, lat);
-    } else {
-      h.position.copy(h.basePos);
-    }
+    h.position.copy(h.basePos);
     _m1.makeTranslation(h.basePos.x, h.basePos.y, h.basePos.z);
     getHazardMesh().setMatrixAt(h.index,_m1);
 
