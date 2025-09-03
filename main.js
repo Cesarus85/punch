@@ -7,7 +7,8 @@ import {
   DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
   AUDIO_ENABLED, HAPTICS_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
-  DEBUG_HAZARD_RING_MS
+  DEBUG_HAZARD_RING_MS,
+  MIN_SPAWN_DISTANCE
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -274,70 +275,101 @@ function recycleHazard(mesh){ if (!mesh) return; mesh.visible=false; mesh.positi
 const MAX_ACTIVE_BODIES = 40;
 function randRange(a,b){ return a + Math.random()*(b-a); }
 
+const MAX_SPAWN_TRIES = 5;
+function isSpawnPosClear(p){
+  const minDistSq = MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE;
+  for (const b of balls){
+    if (b.obj.position.distanceToSquared(p) < minDistSq) return false;
+  }
+  for (const h of hazards){
+    if (h.obj.position.distanceToSquared(p) < minDistSq) return false;
+  }
+  return true;
+}
+
 function spawnBall(sideSign,{style='auto'}={}){
-  if (!isBallReady() || !poseLocked) return;
+  if (!isBallReady() || !poseLocked) return false;
 
-  let sideMag = Math.random() < 0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
-  let heightOffset = -Math.random() * SPAWN_MAX_BELOW;
+  for (let attempt=0; attempt<MAX_SPAWN_TRIES; attempt++){
+    const side = (attempt%2===0 ? sideSign : -sideSign);
 
-  // Extra breit/tief (nie beides)
-  let extWide = Math.random() < tuning.wideProb;
-  let extDeep = Math.random() < tuning.deepProb;
-  if (extWide && extDeep){ if (Math.random() < 0.5) extDeep=false; else extWide=false; }
-  if (extWide) sideMag += WIDE_EXT_M;
-  if (extDeep) heightOffset -= DEEP_EXT_M;
+    let sideMag = Math.random() < 0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
+    let heightOffset = -Math.random() * SPAWN_MAX_BELOW;
 
-  const forward = (SPAWN_DISTANCE - SPAWN_BIAS);
-  _v1.copy(iPos).addScaledVector(iForward, forward).addScaledVector(iRight, sideMag*sideSign).addScaledVector(iUp, heightOffset);
+    // Extra breit/tief (nie beides)
+    let extWide = Math.random() < tuning.wideProb;
+    let extDeep = Math.random() < tuning.deepProb;
+    if (extWide && extDeep){ if (Math.random() < 0.5) extDeep=false; else extWide=false; }
+    if (extWide) sideMag += WIDE_EXT_M;
+    if (extDeep) heightOffset -= DEEP_EXT_M;
 
-  const obj = getPooledBall(); obj.visible = true; obj.position.copy(_v1); scene.add(obj);
-  const velocity = _v2.copy(iForward).multiplyScalar(-tuning.ballSpeed);
+    const forward = (SPAWN_DISTANCE - SPAWN_BIAS);
+    _v1.copy(iPos).addScaledVector(iForward, forward).addScaledVector(iRight, sideMag*side).addScaledVector(iUp, heightOffset);
 
-  const spin = Math.random() < 0.5;
-  let spinAxis=null, spinSpeed=0;
-  if (spin){ spinAxis=_v3.set(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1).normalize().clone(); spinSpeed=THREE.MathUtils.lerp(0.5,2.0,Math.random()); }
+    if (!isSpawnPosClear(_v1)) continue;
 
-  const prevDot = _v4.subVectors(obj.position, iPos).dot(iForward);
+    const obj = getPooledBall(); obj.visible = true; obj.position.copy(_v1); scene.add(obj);
+    const velocity = _v2.copy(iForward).multiplyScalar(-tuning.ballSpeed);
 
-  // --- Drift-Setup je nach gewünschtem Stil ---
-  let driftAmp=0, driftOmega=0, driftPhase=0, driftAxisIdx=0, driftBiasRate=0;
-  const explicitStraight = (style==='straight');
-  const explicitSH = (style==='s-h');
-  const explicitSV = (style==='s-v');
+    const spin = Math.random() < 0.5;
+    let spinAxis=null, spinSpeed=0;
+    if (spin){ spinAxis=_v3.set(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1).normalize().clone(); spinSpeed=THREE.MathUtils.lerp(0.5,2.0,Math.random()); }
 
-  let mustBeStraight = explicitStraight || extWide || extDeep;
-  if (!mustBeStraight){
-    // bei 'auto' entscheidet straightShare
-    if (style==='auto'){ mustBeStraight = Math.random()<tuning.straightShare; }
-  }
+    const prevDot = _v4.subVectors(obj.position, iPos).dot(iForward);
 
-  if (!mustBeStraight){
-    driftAmp = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
-    const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
-    driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
+    // --- Drift-Setup je nach gewünschtem Stil ---
+    let driftAmp=0, driftOmega=0, driftPhase=0, driftAxisIdx=0, driftBiasRate=0;
+    const explicitStraight = (style==='straight');
+    const explicitSH = (style==='s-h');
+    const explicitSV = (style==='s-v');
 
-    if (explicitSV){ driftAxisIdx = 1; driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); }
-    else if (explicitSH){ driftAxisIdx = 0; }
-    else {
-      // auto-S → zufällig H/V 50/50
-      driftAxisIdx = Math.random()<0.5 ? 0 : 1;
-      if (driftAxisIdx===1) driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+    let mustBeStraight = explicitStraight || extWide || extDeep;
+    if (!mustBeStraight){
+      // bei 'auto' entscheidet straightShare
+      if (style==='auto'){ mustBeStraight = Math.random()<tuning.straightShare; }
     }
+
+    if (!mustBeStraight){
+      driftAmp = randRange(tuning.driftMinAmp, tuning.driftMaxAmp);
+      const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
+      driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
+
+      if (explicitSV){ driftAxisIdx = 1; driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); }
+      else if (explicitSH){ driftAxisIdx = 0; }
+      else {
+        // auto-S → zufällig H/V 50/50
+        driftAxisIdx = Math.random()<0.5 ? 0 : 1;
+        if (driftAxisIdx===1) driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+      }
+    }
+
+    balls.push({ obj, velocity: velocity.clone(), alive:true, spin, spinAxis, spinSpeed, prevDot,
+                 t:0, driftAmp, driftOmega, driftPhase, driftAxisIdx, driftBiasRate, prevDrift:0 });
+    return true;
   }
 
-  balls.push({ obj, velocity: velocity.clone(), alive:true, spin, spinAxis, spinSpeed, prevDot,
-               t:0, driftAmp, driftOmega, driftPhase, driftAxisIdx, driftBiasRate, prevDrift:0 });
+  return false;
 }
 
 function spawnHazard(sideSign){
   if (!poseLocked) return null;
-  const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
-  const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
-  _v1.copy(iPos).addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS)).addScaledVector(iRight, sideMag*sideSign).addScaledVector(iUp, heightOffset);
-  const obj = getPooledHazard(); obj.visible = true; obj.position.copy(_v1); scene.add(obj);
-  const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
-  const prevDot = _v3.subVectors(obj.position, iPos).dot(iForward);
-  hazards.push({ obj, velocity: velocity.clone(), alive:true, prevDot }); return _v1.clone();
+
+  for (let attempt=0; attempt<MAX_SPAWN_TRIES; attempt++){
+    const side = (attempt%2===0 ? sideSign : -sideSign);
+    const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
+    const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
+    _v1.copy(iPos).addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS)).addScaledVector(iRight, sideMag*side).addScaledVector(iUp, heightOffset);
+
+    if (!isSpawnPosClear(_v1)) continue;
+
+    const obj = getPooledHazard(); obj.visible = true; obj.position.copy(_v1); scene.add(obj);
+    const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
+    const prevDot = _v3.subVectors(obj.position, iPos).dot(iForward);
+    hazards.push({ obj, velocity: velocity.clone(), alive:true, prevDot });
+    return _v1.clone();
+  }
+
+  return null;
 }
 
 /* =================== Körperkapsel & Events =================== */
@@ -597,7 +629,8 @@ function loop(){
     // 2) Hazard ggf. zusätzlich
     if (HAZARD_ENABLED && Math.random()<tuning.hazardProb){
       const side = Math.random()<0.5 ? -1 : +1;
-      const pos = spawnHazard(side); if (pos) flashSpawnRingAt(pos);
+      const pos = spawnHazard(side);
+      if (pos) flashSpawnRingAt(pos);
     }
   }
 
