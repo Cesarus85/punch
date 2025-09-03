@@ -114,7 +114,7 @@ function drawUIButton(btn){
 // backBtn.position.set(0, -0.12, 0.002);
 // nachher:
 const backBtn = makeUIButton('Zurück zum Menü', 0.58, 0.14);
-backBtn.position.set(0, -0.22, 0.002); // tiefer, kein Overlap mit HUD
+backBtn.position.set(0, -0.52, 0.002); // tiefer, kein Overlap mit HUD
 hud.plane.add(backBtn);
 backBtn.position.set(0, -0.12, 0.002);
 backBtn.renderOrder = 11;
