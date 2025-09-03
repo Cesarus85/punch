@@ -33,6 +33,7 @@ export function loadBall(){
         scrubMaterial(mat);
 
         ballMesh = new THREE.InstancedMesh(geom, mat, MAX_POOL_BALLS);
+        ballMesh.frustumCulled = false;
         ballMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
         const arr = new Float32Array(MAX_POOL_BALLS*4);
