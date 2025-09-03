@@ -1,5 +1,5 @@
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
-import { HAZARD_RADIUS, HAZARD_COLOR, HAZARD_EMISSIVE_INTENSITY } from './config.js';
+import { HAZARD_RADIUS, HAZARD_COLOR, HAZARD_EMISSIVE_INTENSITY, DRIFT_ENABLED } from './config.js';
 
 export const MAX_HAZARDS = 32;
 
@@ -19,9 +19,15 @@ function makeMaterial(){
     m.onBeforeCompile = (shader)=>{
       shader.uniforms.uTime = { value: 0 };
       shader.vertexShader = `attribute vec4 instData;\nuniform float uTime;\n` + shader.vertexShader;
+      let driftChunk = '';
+      if (DRIFT_ENABLED){
+        driftChunk = `float drift = abs(instData.y) * sin(instData.z * uTime + instData.w);\n`+
+                     `if(instData.y >= 0.0){\n  transformed.x += drift;\n}else{\n  transformed.y += drift;\n}\n`;
+      }
       shader.vertexShader = shader.vertexShader.replace(
         '#include <begin_vertex>',
-        `\nvec3 transformed = vec3(position);\nfloat angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\ntransformed.xz = rot * transformed.xz;\n`
+        `\nvec3 transformed = vec3(position);\n` + driftChunk +
+        `float angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\ntransformed.xz = rot * transformed.xz;\n`
       );
       m.userData.shader = shader;
     };
