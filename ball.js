@@ -3,26 +3,72 @@ import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.166.1/examples/jsm/loaders/GLTFLoader.js?module';
 import { BALL_RADIUS, BALL_URL } from './config.js';
 
-const loader = new GLTFLoader();
-let prefab = null;
-let ready = false;
-let scaleFactor = 1;
+export const MAX_POOL_BALLS = 64;
 
-export function loadBall() {
+const loader = new GLTFLoader();
+let ready = false;
+let ballMesh = null;
+let instAttr = null;
+const freeIdx = [];
+const _m = new THREE.Matrix4();
+
+export function loadBall(){
   return new Promise((resolve, reject) => {
     loader.load(
       BALL_URL,
       (gltf) => {
-        prefab = gltf.scene;
+        let mesh = null;
+        gltf.scene.traverse((n)=>{ if(n.isMesh && !mesh) mesh = n; });
+        if(!mesh){ reject(new Error('no mesh in ball gltf')); return; }
 
-        // auf BALL_RADIUS skalieren
-        const box = new THREE.Box3().setFromObject(prefab);
+        const geom = mesh.geometry.clone();
+        const mat  = mesh.material.clone();
+
+        const box = new THREE.Box3().setFromObject(gltf.scene);
         const size = new THREE.Vector3(); box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        scaleFactor = (2 * BALL_RADIUS) / maxDim;
+        const maxDim = Math.max(size.x,size.y,size.z) || 1;
+        const scale = (2*BALL_RADIUS)/maxDim;
+        geom.applyMatrix4(new THREE.Matrix4().makeScale(scale,scale,scale));
 
-        // Basismaterialien opak und „entschärft“
-        scrubMaterials(prefab);
+        scrubMaterial(mat);
+
+        ballMesh = new THREE.InstancedMesh(geom, mat, MAX_POOL_BALLS);
+        ballMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        const arr = new Float32Array(MAX_POOL_BALLS*4);
+        instAttr = new THREE.InstancedBufferAttribute(arr, 4);
+        ballMesh.geometry.setAttribute('instData', instAttr);
+
+        for(let i=0;i<MAX_POOL_BALLS;i++){
+          freeIdx.push(i);
+          _m.makeTranslation(0,-999,0);
+          ballMesh.setMatrixAt(i,_m);
+        }
+        ballMesh.instanceMatrix.needsUpdate = true;
+
+        ballMesh.material.onBeforeCompile = (shader)=>{
+          shader.uniforms.uTime = { value: 0 };
+          shader.vertexShader = `
+attribute vec4 instData;
+uniform float uTime;
+` + shader.vertexShader;
+          shader.vertexShader = shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            `
+vec3 transformed = vec3(position);
+float drift = abs(instData.y) * sin(instData.z * uTime + instData.w);
+if(instData.y >= 0.0){
+  transformed.x += drift;
+}else{
+  transformed.y += drift;
+}
+float angle = instData.x * uTime;
+mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+transformed.xz = rot * transformed.xz;
+`
+          );
+          ballMesh.material.userData.shader = shader;
+        };
 
         ready = true;
         resolve();
@@ -34,81 +80,40 @@ export function loadBall() {
 }
 
 export function isBallReady(){ return ready; }
+export function getBallMesh(){ return ballMesh; }
+export function getBallAttribute(){ return instAttr; }
 
-export function makeBall(){
-  // Tiefenklon + MATERIALIEN JE INSTANZ KLONEN
-  const obj = prefab.clone(true);
-  makeMaterialsUnique(obj);     // <-- wichtig!
-  obj.visible = true;
-  obj.scale.setScalar(scaleFactor);
-  scrubMaterials(obj);          // opak, keine Transmission/AlphaTest
-  setOpacity(obj, 1.0);         // sicherheitshalber volle Deckkraft
-  return obj;
+export function allocBall(){
+  return freeIdx.pop();
 }
 
-export function setOpacity(obj, opacity){
-  traverseMats(obj, (m)=>{
-    if (opacity >= 1.0){
-      m.transparent = false;
-      m.opacity = 1.0;
-      m.depthWrite = true;
-      m.depthTest  = true;
-      m.alphaTest  = 0.0;
-      m.blending   = THREE.NormalBlending;
-    } else {
-      // nur beim Ausblenden
-      m.transparent = true;
-      m.opacity = opacity;
-      m.depthWrite = false;
-      m.depthTest  = true;
-      m.alphaTest  = 0.0;
-      m.blending   = THREE.NormalBlending;
-    }
-    m.needsUpdate = true;
-  });
+export function freeBall(idx){
+  if(idx===undefined || idx===null) return;
+  _m.makeTranslation(0,-999,0);
+  ballMesh.setMatrixAt(idx,_m);
+  const aIndex = idx*4;
+  instAttr.array[aIndex] = instAttr.array[aIndex+1] = instAttr.array[aIndex+2] = instAttr.array[aIndex+3] = 0;
+  instAttr.needsUpdate = true;
+  ballMesh.instanceMatrix.needsUpdate = true;
+  freeIdx.push(idx);
 }
 
-// ---------- Helfer ----------
-function traverseMats(obj, fn){
-  obj.traverse((n)=>{
-    if (n.isMesh && n.material){
-      const mats = Array.isArray(n.material) ? n.material : [n.material];
-      mats.forEach(fn);
-    }
-  });
-}
-
-function makeMaterialsUnique(obj){
-  obj.traverse((n)=>{
-    if (n.isMesh && n.material){
-      if (Array.isArray(n.material)){
-        n.material = n.material.map(m => m.clone());
-      } else {
-        n.material = n.material.clone();
-      }
-      // Texturen bleiben per Referenz geteilt (ok), aber Materialinstanz ist unique
-    }
-  });
-}
-
-function scrubMaterials(obj){
-  traverseMats(obj, (m)=>{
-    if (m.isMeshPhysicalMaterial){
-      m.transmission = 0.0;
-      m.thickness = 0.0;
-      m.attenuationDistance = 1e9;
-      m.ior = 1.0;
-      m.sheen = 0.0;
-      m.clearcoat = 0.0;
-    }
-    m.transparent = false;
-    m.opacity = 1.0;
-    m.alphaMap = null;
-    m.alphaTest = 0.0;
-    m.depthWrite = true;
-    m.depthTest  = true;
-    m.blending   = THREE.NormalBlending;
-    m.side = THREE.FrontSide;
-    m.needsUpdate = true;
-  });
+function scrubMaterial(m){
+  if (m.isMeshPhysicalMaterial){
+    m.transmission = 0.0;
+    m.thickness = 0.0;
+    m.attenuationDistance = 1e9;
+    m.ior = 1.0;
+    m.sheen = 0.0;
+    m.clearcoat = 0.0;
+  }
+  m.transparent = false;
+  m.opacity = 1.0;
+  m.alphaMap = null;
+  m.alphaTest = 0.0;
+  m.depthWrite = true;
+  m.depthTest  = true;
+  m.blending   = THREE.NormalBlending;
+  m.side = THREE.FrontSide;
+  m.needsUpdate = true;
 }
