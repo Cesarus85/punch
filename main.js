@@ -464,6 +464,7 @@ for (const c of controllers){
       const hit = intersectMesh(c, backBtn);
       if (hit){
         hideBackToMenuButton();
+        hud.plane.visible = false; 
         menu.placeAt(iPos, iForward);
         menu.setMode('prestart');
         menu.setVisible(true);
