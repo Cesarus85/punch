@@ -61,11 +61,9 @@ function patTriplet(){
 // Pools mit einfacher Gewichtung durch Mehrfachnennung
 const POOLS = {
   'Anfänger': [
-    patLR, patLR, patLR,
-    patRL, patRL,
+    patLR, patLR, patLR, patLR,
+    patRL, patRL, patRL,
     patDoubleStraight,
-    patS_H,  // seltene S
-    patS_V,
     patMixStraightThenS
   ],
   'Aufsteiger': [
