@@ -109,8 +109,12 @@ function drawUIButton(btn){
   ctx.fillText(label, (W-tw)/2, H*0.66);
   tex.needsUpdate = true;
 }
-const backBtn = makeUIButton('Zurück zum Menü', 0.62, 0.16);
-backBtn.visible = false;
+// vorher:
+// const backBtn = makeUIButton('Zurück zum Menü', 0.62, 0.16);
+// backBtn.position.set(0, -0.12, 0.002);
+// nachher:
+const backBtn = makeUIButton('Zurück zum Menü', 0.58, 0.14);
+backBtn.position.set(0, -0.22, 0.002); // tiefer, kein Overlap mit HUD
 hud.plane.add(backBtn);
 backBtn.position.set(0, -0.12, 0.002);
 backBtn.renderOrder = 11;
