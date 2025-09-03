@@ -1,6 +1,7 @@
-// Menü-Overlay mit stabiler Hover-Selektion & dynamischer Titelgröße
+// Robustes Menü mit Hit-Plane + 2D-Picking (kein Flackern, keine Geister-Hovers)
 import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 
+// Canvas-Plane-Helfer
 function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024; canvas.height = 256;
@@ -20,6 +21,7 @@ function drawTitle(mesh, text) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle = '#ffffff';
+  // Auto-Fit
   let size = 110;
   while (size >= 60) {
     ctx.font = `bold ${size}px system-ui, Arial`;
@@ -82,17 +84,27 @@ export function createMenu(diffLabels, speedLabels) {
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
+  // Hintergrund-Panel (sichtbar) – Z=0 im Gruppenraum
   const panel = makePanelBG(1.46, 1.06);
   group.add(panel);
+
+  // Unsichtbare Hit-Plane knapp VOR den Buttons für Ray-Treffer + Laser-Stop
+  const hitPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.46, 1.06, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.0, depthWrite:false })
+  );
+  hitPlane.position.z = 0.006; // Buttons liegen bei z ≈ 0.006..0.007
+  hitPlane.name = 'menuHitPlane';
+  group.add(hitPlane);
 
   // Titel
   const title = makeCanvasPlane(1.36, 0.16);
   title.userData.kind = 'title';
   drawTitle(title, 'Spieleinstellungen');
-  title.position.set(0, 0.40, 0.001);
+  title.position.set(0, 0.40, 0.007);
   group.add(title);
 
-  // Schwierigkeits-Gruppen
+  // Buttons
   const diffButtons = diffLabels.map((lbl, i) => {
     const b = makeButton(lbl, 0.42, 0.14);
     b.userData.kind = 'difficulty';
@@ -106,13 +118,12 @@ export function createMenu(diffLabels, speedLabels) {
     return b;
   });
 
-  // Control-Buttons
   const startBtn   = makeButton('Starten',    1.36, 0.16); startBtn.userData.kind = 'start';
   const resumeBtn  = makeButton('Fortsetzen', 0.66, 0.14); resumeBtn.userData.kind = 'resume';
   const restartBtn = makeButton('Neu starten',0.66, 0.14); restartBtn.userData.kind = 'restart';
   const quitBtn    = makeButton('Beenden',    1.36, 0.14); quitBtn.userData.kind = 'quit';
 
-  // Layout
+  // Layout (alle Buttons auf z ~ 0.007, also VOR panel, deckungsgleich mit hitPlane)
   const rowY_diff  = 0.18;
   const rowY_speed = -0.02;
   const rowY_ctrl1 = -0.26;
@@ -120,13 +131,13 @@ export function createMenu(diffLabels, speedLabels) {
   const rowY_ctrl3 = -0.58;
   const positionsX = [-0.48, 0, 0.48];
 
-  diffButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_diff,  0.001); group.add(b); });
-  speedButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_speed, 0.001); group.add(b); });
+  diffButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_diff,  0.007); group.add(b); });
+  speedButtons.forEach((b, i) => { b.position.set(positionsX[i], rowY_speed, 0.007); group.add(b); });
 
-  resumeBtn.position.set(-0.34, rowY_ctrl1, 0.001);
-  restartBtn.position.set(+0.34, rowY_ctrl1, 0.001);
-  startBtn.position.set(0, rowY_ctrl2, 0.001);
-  quitBtn.position.set(0, rowY_ctrl3, 0.001);
+  resumeBtn.position.set(-0.34, rowY_ctrl1, 0.007);
+  restartBtn.position.set(+0.34, rowY_ctrl1, 0.007);
+  startBtn.position.set(0, rowY_ctrl2, 0.007);
+  quitBtn.position.set(0, rowY_ctrl3, 0.007);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
   // Auswahlzustand
@@ -134,7 +145,7 @@ export function createMenu(diffLabels, speedLabels) {
   diffButtons[selDiff].userData.selected = true; drawButton(diffButtons[selDiff]);
   speedButtons[selSpeed].userData.selected = true; drawButton(speedButtons[selSpeed]);
 
-  // Modus: 'prestart' | 'ingame'
+  // Modus: 'prestart' | 'ingame' (welche Buttons sichtbar)
   let mode = 'prestart';
   function setMode(m) {
     mode = m;
@@ -152,7 +163,7 @@ export function createMenu(diffLabels, speedLabels) {
   }
   setMode('prestart');
 
-  // Hover-Verwaltung (zentral, stabil)
+  // Hover zentral (ein Button max.)
   let hoveredBtn = null;
   function clearHover() {
     if (hoveredBtn) { hoveredBtn.userData.hover = false; drawButton(hoveredBtn); hoveredBtn = null; }
@@ -164,6 +175,7 @@ export function createMenu(diffLabels, speedLabels) {
     if (hoveredBtn) { hoveredBtn.userData.hover = true; drawButton(hoveredBtn); }
   }
 
+  // Sichtbarkeit / Positionierung
   function setVisible(v) { group.visible = v; if (!v) clearHover(); }
   function placeAt(pos, forward) {
     const target = new THREE.Vector3().copy(pos).add(forward);
@@ -171,26 +183,42 @@ export function createMenu(diffLabels, speedLabels) {
     group.lookAt(target);
   }
 
-  function getRayTargets() {
-    const visibles = [ ...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn ]
-      .filter(o => o.visible);
-    return [panel, ...visibles];
-  }
-  function getActiveButtons() {
-    return [ ...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn ]
-      .filter(o => o.visible && !o.userData.disabled);
+  // ---------------------------------------
+  // 2D-Picking: worldPoint -> group local -> Buttonrechtecke
+  // ---------------------------------------
+  function pickButtonAtWorldPoint(worldPoint) {
+    const local = worldPoint.clone();
+    group.worldToLocal(local); // (x,y, z≈0.006..0.007)
+    const x = local.x, y = local.y;
+
+    const candidates = [
+      ...diffButtons, ...speedButtons, startBtn, resumeBtn, restartBtn, quitBtn
+    ].filter(o => o.visible && !o.userData.disabled);
+
+    for (const b of candidates) {
+      const w = b.geometry.parameters.width;
+      const h = b.geometry.parameters.height;
+      const bx = b.position.x, by = b.position.y;
+      if (Math.abs(x - bx) <= w/2 && Math.abs(y - by) <= h/2) {
+        return b;
+      }
+    }
+    return null;
   }
 
+  // Auswahländerung
   function click(btn) {
     if (!btn || !btn.visible || btn.userData.disabled) return null;
     const { kind, index } = btn.userData;
     if (kind === 'difficulty') {
-      diffButtons.forEach(b => { b.userData.selected = false; drawButton(b); });
-      btn.userData.selected = true; drawButton(btn); selDiff = index; return { action:'set-difficulty', value: selDiff };
+      [0,1,2].forEach(i => { diffButtons[i].userData.selected = (i===index); drawButton(diffButtons[i]); });
+      selDiff = index;
+      return { action:'set-difficulty', value: selDiff };
     }
     if (kind === 'speed') {
-      speedButtons.forEach(b => { b.userData.selected = false; drawButton(b); });
-      btn.userData.selected = true; drawButton(btn); selSpeed = index; return { action:'set-speed', value: selSpeed };
+      [0,1,2].forEach(i => { speedButtons[i].userData.selected = (i===index); drawButton(speedButtons[i]); });
+      selSpeed = index;
+      return { action:'set-speed', value: selSpeed };
     }
     if (kind === 'start')   return { action:'start' };
     if (kind === 'resume')  return { action:'resume' };
@@ -202,8 +230,10 @@ export function createMenu(diffLabels, speedLabels) {
   function getSelection() { return { difficultyIndex: selDiff, speedIndex: selSpeed }; }
 
   return {
-    group, panel,
+    group,
+    panel,
+    hitPlane,                 // << für Ray-Treffer/Laser-Clamp
     setVisible, placeAt, setMode,
-    getRayTargets, getActiveButtons, setHover, click, getSelection
+    setHover, pickButtonAtWorldPoint, click, getSelection
   };
 }
