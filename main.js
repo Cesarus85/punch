@@ -26,7 +26,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(ARButton.createButton(renderer, { optionalFeatures: ['local-floor', 'hand-tracking'] }));
+document.body.appendChild(ARButton.createButton(renderer, { optionalFeatures: ['local-floor','hand-tracking'] }));
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 window.addEventListener('resize', ()=>renderer.setSize(window.innerWidth, window.innerHeight));
 
@@ -63,6 +63,44 @@ hud.plane.material.depthWrite = false;
 hud.plane.material.depthTest  = false;
 hud.plane.visible = false;
 
+// ---------- HUD-Button: „Zurück zum Menü“ ----------
+function makeUIButton(label, w=0.60, h=0.16){
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent:true, depthWrite:false });
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.userData = { _ctx:ctx, _tex:tex, label, hover:false };
+  drawUIButton(mesh);
+  return mesh;
+}
+function drawUIButton(btn){
+  const { _ctx:ctx, _tex:tex, label, hover } = btn.userData;
+  const W=ctx.canvas.width, H=ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#222c';
+  ctx.fillRect(0,0,W,H);
+  if (hover){
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(6,6,W-12,H-12);
+  }
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 96px system-ui, Arial';
+  const tw = ctx.measureText(label).width;
+  ctx.fillText(label, (W-tw)/2, H*0.66);
+  tex.needsUpdate = true;
+}
+const backBtn = makeUIButton('Zurück zum Menü', 0.62, 0.16);
+backBtn.visible = false;
+// Wir hängen den Button als Kind ans HUD → gleiche Pose/Orientierung
+hud.plane.add(backBtn);
+backBtn.position.set(0, -0.12, 0.002); // leicht unter der HUD-Mitte
+backBtn.renderOrder = 11;
+
 // ---------- Fäuste ----------
 const fistsMgr = new FistsManager(renderer, scene, { showControllerModels:true, sphereVisRadius:0.03 });
 
@@ -87,9 +125,9 @@ const TIME_LABELS  = ['Endlos','1:00','3:00','5:00'];
 const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25 };
 const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
 
-// NEU: „extra breit“ (horizontal) und „extra tief“ – beide ~20 cm, geradlinig
-const WIDE_EXT_M = 0.20;   // 20 cm breiter als bisherige Max-Breite
-const DEEP_EXT_M = 0.20;   // 20 cm tiefer als bisherige Max-Tiefe
+// Extra-Spawn-Varianten (geradlinig)
+const WIDE_EXT_M = 0.20;   // +20 cm horizontal
+const DEEP_EXT_M = 0.20;   // +20 cm tiefer
 const EXT_PROB = {
   'Anfänger':  { wide: 0.05, deep: 0.05 },
   'Aufsteiger':{ wide: 0.12, deep: 0.12 },
@@ -118,6 +156,7 @@ function beginCountdown(){
   applyGamePreset(DIFF_LABELS[sel.difficultyIndex], SPEED_LABELS[sel.speedIndex], TIME_LABELS[sel.timeIndex]);
   hardResetRound(); // neues Spiel bei 0
   menu.setVisible(false); setLasersVisible(false);
+  hideBackToMenuButton();
   game.menuActive=false;
   ensureCountdownPlane(); placeCountdown();
   countdown.active=true; countdown.time=3.999; drawCountdown(3);
@@ -139,13 +178,13 @@ let gameMode = 'endless'; // 'endless' | 'time60' | 'time180' | 'time300'
 let timeLeft = null;
 
 function applyGamePreset(diffName, speedName, timeLabel){
-  // Schwierigkeit: S-Kurven-Anteil + Extreme-Spawn-Wahrscheinlichkeiten
+  // Schwierigkeit
   tuning.straightShare = DIFFICULTY_STRAIGHT_SHARE[diffName] ?? 1.0;
   const ext = EXT_PROB[diffName] ?? EXT_PROB['Aufsteiger'];
   tuning.wideProb = ext.wide;
   tuning.deepProb = ext.deep;
 
-  // Speed
+  // Geschwindigkeit
   const sMul = SPEED_PRESETS[speedName] ?? 1.0;
   tuning.ballSpeed   = BALL_SPEED   * sMul;
   tuning.hazardSpeed = HAZARD_SPEED * sMul;
@@ -180,19 +219,17 @@ function randRange(a,b){ return a + Math.random()*(b-a); }
 function spawnBall(sideSign,{forceStraight=false}={}){
   if (!isBallReady() || !poseLocked) return;
 
-  // Basis-Seitenoffset (eng/weit)
+  // Basis-Seite & Höhe
   let sideMag = Math.random() < 0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
   let heightOffset = -Math.random() * SPAWN_MAX_BELOW;
 
-  // „extra breit“ (horizontal +20 cm) & „extra tief“ (−20 cm) – nie beides zugleich
+  // Extreme: extra breit / extra tief (nie beides)
   let extWide = Math.random() < tuning.wideProb;
   let extDeep = Math.random() < tuning.deepProb;
   if (extWide && extDeep){ if (Math.random() < 0.5) extDeep=false; else extWide=false; }
+  if (extWide) sideMag += WIDE_EXT_M;
+  if (extDeep) heightOffset -= DEEP_EXT_M;
 
-  if (extWide) sideMag += WIDE_EXT_M;    // HORIZONTALE Erweiterung
-  if (extDeep) heightOffset -= DEEP_EXT_M; // VERTIKALE Erweiterung
-
-  // Spawn-Position (vorne bleibt wie gehabt)
   const forward = (SPAWN_DISTANCE - SPAWN_BIAS);
   const spawnPos = new THREE.Vector3()
     .copy(iPos)
@@ -208,7 +245,7 @@ function spawnBall(sideSign,{forceStraight=false}={}){
   if (spin){ spinAxis=new THREE.Vector3(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1).normalize(); spinSpeed=THREE.MathUtils.lerp(0.5,2.0,Math.random()); }
   const prevDot = new THREE.Vector3().subVectors(spawnPos, iPos).dot(iForward);
 
-  // Drift / S-Kurve (deaktiviert bei extra breit/tief)
+  // Drift (S-Kurve) deaktiviert bei extWide/Deep oder erzwungen geradlinig
   let driftAmp=0, driftOmega=0, driftPhase=0;
   const mustBeStraight = forceStraight || extWide || extDeep;
   if (!mustBeStraight){
@@ -257,7 +294,7 @@ function clearActiveObjectsKeepScore(){
   balls.length=0; hazards.length=0;
 }
 
-// ---------- Controller Rays (Hit-Plane) ----------
+// ---------- Controller Rays ----------
 const raycaster = new THREE.Raycaster();
 const controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
 const lasers = [];
@@ -283,6 +320,21 @@ for (const c of controllers){
   const laser = makeLaser(); c.add(laser); lasers.push(laser);
 
   c.addEventListener('selectstart', ()=>{
+    // 1) Back-to-Menu Button?
+    if (backBtn.visible){
+      const hit = intersectMesh(c, backBtn);
+      if (hit){
+        // Menü im Prestart-Modus öffnen
+        hideBackToMenuButton();
+        menu.placeAt(iPos, iForward);
+        menu.setMode('prestart');
+        menu.setVisible(true);
+        setLasersVisible(true);
+        game.menuActive = true;
+        return;
+      }
+    }
+    // 2) Menü?
     if (!game.menuActive) return;
     const hit = intersectHitPlane(c);
     if (!hit) return;
@@ -300,7 +352,14 @@ function intersectHitPlane(controller){
   controller.getWorldPosition(origin);
   dir.applyQuaternion(controller.quaternion).normalize();
   raycaster.set(origin, dir);
-  const hit = raycaster.intersectObject(menu.hitPlane, false)[0];
+  return raycaster.intersectObject(menu.hitPlane, false)[0] || null;
+}
+function intersectMesh(controller, mesh){
+  const origin=new THREE.Vector3(), dir=new THREE.Vector3(0,0,-1);
+  controller.getWorldPosition(origin);
+  dir.applyQuaternion(controller.quaternion).normalize();
+  raycaster.set(origin, dir);
+  const hit = raycaster.intersectObject(mesh, false)[0];
   return hit || null;
 }
 
@@ -315,7 +374,8 @@ let _pausedSpawnTimer = 0;
 function openMenuIngame(){
   game.running=false; hud.plane.visible=false;
   _pausedSpawnTimer = spawnTimer;
-  clearActiveObjectsKeepScore(); // keine Misses beim Pausieren
+  clearActiveObjectsKeepScore();
+  hideBackToMenuButton();
   menu.placeAt(iPos, iForward);
   menu.setMode('ingame');
   menu.setVisible(true); setLasersVisible(true);
@@ -324,7 +384,23 @@ function openMenuIngame(){
 function closeMenuResume(){
   menu.setVisible(false); setLasersVisible(false);
   game.menuActive=false; game.running=true; hud.plane.visible=true;
+  hideBackToMenuButton();
   spawnTimer = _pausedSpawnTimer;
+}
+function showBackToMenuButton(){
+  // Sichtbar + Raycasts aktivieren
+  backBtn.visible = true;
+  setLasersVisible(true);
+  // kein Menü gleichzeitig
+  menu.setVisible(false);
+  game.menuActive = false;
+  // HUD bleibt sichtbar
+  hud.plane.visible = true;
+}
+function hideBackToMenuButton(){
+  backBtn.visible = false;
+  backBtn.userData.hover = false; drawUIButton(backBtn);
+  // Laser bleiben ggf. für Menü sichtbar; hier nichts umstellen
 }
 
 // ---------- Loop ----------
@@ -334,15 +410,16 @@ let spawnTimer=0, sideSwitch=1;
 function loop(){
   const dt = clock.getDelta();
 
-  // A/X Face-Buttons
+  // A/X Face-Buttons (nur wenn Spiel läuft oder Menü aktiv; beim Back-Button lieber „klicken“ statt A/X)
   const session = renderer.xr.getSession?.();
   if (session){
     if (!loop._btnPrev) loop._btnPrev = {};
     for (const src of session.inputSources){
       const gp=src.gamepad; if (!gp) continue;
       if (isRisingEdgeAX(gp, `${src.handedness}:AX`, loop._btnPrev)){
-        if (!game.menuActive) openMenuIngame();
-        else                 closeMenuResume();
+        if (game.running && !game.menuActive) openMenuIngame();
+        else if (game.menuActive)            closeMenuResume();
+        // Wenn nur der Back-Button sichtbar ist, ignorieren wir A/X (bewusst)
       }
     }
   }
@@ -352,18 +429,34 @@ function loop(){
     updateHUD('Konfigurieren & Starten');
   }
 
-  // Menü Hover/Laser
+  // Hover/Laser für aktiven Zustand
   if (game.menuActive){
-    let bestHit=null, bestIdx=-1;
+    // Menü: Laser an Hit-Plane terminieren
+    let bestHit=null;
     for (let i=0;i<controllers.length;i++){
       const c=controllers[i];
       const hit = intersectHitPlane(c);
       if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true;
-        if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; bestIdx=i; }
+        if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; }
       } else { lasers[i].visible=false; }
     }
-    if (bestHit){ menu.setHover(menu.pickButtonAtWorldPoint(bestHit.point)); }
-    else { menu.setHover(null); }
+    menu.setHover(bestHit ? menu.pickButtonAtWorldPoint(bestHit.point) : null);
+  } else if (backBtn.visible){
+    // Back-Button: Laser am Button terminieren
+    let bestHit=null;
+    for (let i=0;i<controllers.length;i++){
+      const c=controllers[i];
+      const hit = intersectMesh(c, backBtn);
+      if (hit){ setLaserDistance(lasers[i], hit.distance); lasers[i].visible=true;
+        if (!bestHit || hit.distance<bestHit.distance){ bestHit=hit; }
+      } else { lasers[i].visible=false; }
+    }
+    const hovering = !!bestHit;
+    backBtn.userData.hover = hovering;
+    drawUIButton(backBtn);
+  } else {
+    // Kein Menü, kein Back-Button → keine Laser
+    setLasersVisible(false);
   }
 
   // Countdown
@@ -385,11 +478,10 @@ function loop(){
     if (timeLeft <= 0){
       timeLeft = 0;
       canSpawn = false;
-      game.running = false;
-      menu.placeAt(iPos, iForward);
-      menu.setMode('ingame');
-      menu.setVisible(true); setLasersVisible(true);
-      game.menuActive = true;
+      game.running = false; // Zeit abgelaufen → Spiel gestoppt
+      clearActiveObjectsKeepScore(); // keine Restobjekte
+      // Nur HUD + Back-Button anzeigen, NICHT Menü
+      showBackToMenuButton();
     }
   }
 
@@ -439,7 +531,7 @@ function loop(){
     if (dot<-6.0){ h.alive=false; scene.remove(h.obj); hazards.splice(i,1); }
   }
 
-  updateHUD(countdown.active ? '' : (game.menuActive ? 'Konfigurieren & Starten' : ''));
+  updateHUD(countdown.active ? '' : (game.menuActive ? 'Konfigurieren & Starten' : (backBtn.visible ? 'Zeit abgelaufen' : '')));
   renderer.render(scene, camera);
 }
 
@@ -450,6 +542,7 @@ renderer.xr.addEventListener('sessionend', ()=>{
   for (const h of hazards) scene.remove(h.obj);
   balls.length=0; hazards.length=0;
   menu.setVisible(false); setLasersVisible(false);
+  hideBackToMenuButton();
   game.menuActive=false; hud.plane.visible=false;
 });
 start();
