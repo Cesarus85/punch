@@ -16,15 +16,15 @@ function makeMaterial(){
   m.depthWrite = true;
   m.depthTest = true;
   m.side = THREE.FrontSide;
-  m.onBeforeCompile = (shader)=>{
-    shader.uniforms.uTime = { value: 0 };
-    shader.vertexShader = `attribute vec4 instData;\nuniform float uTime;\n` + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      '#include <begin_vertex>',
-      `\nvec3 transformed = vec3(position);\nfloat drift = instData.y * sin(instData.z * uTime + instData.w);\ntransformed.x += drift;\nfloat angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\ntransformed.xz = rot * transformed.xz;\n`
-    );
-    m.userData.shader = shader;
-  };
+    m.onBeforeCompile = (shader)=>{
+      shader.uniforms.uTime = { value: 0 };
+      shader.vertexShader = `attribute vec4 instData;\nuniform float uTime;\n` + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `\nvec3 transformed = vec3(position);\nfloat angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\ntransformed.xz = rot * transformed.xz;\n`
+      );
+      m.userData.shader = shader;
+    };
   return m;
 }
 
