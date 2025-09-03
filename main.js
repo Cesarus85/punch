@@ -60,7 +60,7 @@ const hud = createHUD(scene);
 hud.plane.renderOrder = 10;
 hud.plane.material.depthWrite = false;
 hud.plane.material.depthTest  = false;
-hud.plane.visible = false; // kein Pause-Icon
+hud.plane.visible = false;
 
 // ---------- Fäuste ----------
 const fistsMgr = new FistsManager(renderer, scene, { showControllerModels:true, sphereVisRadius:0.03 });
@@ -191,11 +191,17 @@ function hardResetRound(){
   updateHUD('');
 }
 
-// ---------- Controller Rays (Laser) – nur im Menü, Länge = Panel-Treffer ----------
+// „sofortiges Eliminieren“ (Pause) – Stats bleiben!
+function clearActiveObjectsKeepScore(){
+  for (const b of [...balls]) scene.remove(b.obj);
+  for (const h of [...hazards]) scene.remove(h.obj);
+  balls.length=0; hazards.length=0;
+}
+
+// ---------- Controller Rays (Laser) – nur im Menü, am Panel terminiert ----------
 const raycaster=new THREE.Raycaster();
 const controllers=[renderer.xr.getController(0), renderer.xr.getController(1)];
 const lasers=[];
-
 function makeLaser(){
   const baseLen=2.0;
   const geo=new THREE.CylinderGeometry(0.005,0.005,baseLen,12);
@@ -208,16 +214,12 @@ function makeLaser(){
 }
 function setLaserDistance(laser, dist){
   const base=laser.userData.baseLen;
-  const d=Math.max(0.05, Math.min(dist, base)); // clamp 5 cm .. base
+  const d=Math.max(0.05, Math.min(dist, base));
   const s=d/base;
   laser.scale.set(1,s,1);
   laser.position.z=-(d/2);
 }
 function setLasersVisible(v){ lasers.forEach(l=>l.visible=v); }
-
-// Hover-Hysterese (verhindert Flackern)
-let hoveredBtn=null, hoverCandidate=null, hoverCandTime=0;
-const HOVER_STICKY_MS = 120;
 
 for (const c of controllers){
   scene.add(c);
@@ -225,68 +227,114 @@ for (const c of controllers){
 
   c.addEventListener('selectstart', ()=>{
     if (!game.menuActive) return;
-    // Klick auf stabilen Hover
-    const action = menu.click(hoveredBtn);
+    const action = menu.click(_hoveredBtnStable);
     if (!action) return;
     if (action.action==='start'){ beginCountdown(); }
-    else if (action.action==='resume'){ menu.setVisible(false); setLasersVisible(false); game.menuActive=false; game.running=true; hud.plane.visible=true; }
+    else if (action.action==='resume'){ closeMenuResume(); }
     else if (action.action==='restart'){ hardResetRound(); beginCountdown(); }
-    else if (action.action==='quit'){
-      const s = renderer.xr.getSession?.(); if (s) s.end();
-    }
+    else if (action.action==='quit'){ const s=renderer.xr.getSession?.(); if (s) s.end(); }
   });
 }
 
+// ---------- Hover/Controller-Selektion (stabil, kein Flackern) ----------
+let _hoveredBtnStable=null;
+let _hoverCand=null, _hoverCandMs=0;
+let _activeCtrl=-1, _activeCtrlCand=-1, _activeCtrlCandMs=0;
+const HOVER_STICKY_MS = 120;
+const CTRL_STICKY_MS  = 150;
+const ANGLE_MAX_DEG   = 14;
+const EPS_DIST        = 0.002;
+
 function updateMenuHoverAndLasers(dt){
   const targets = menu.getRayTargets();
-  // Nächsten Button-Kandidaten bestimmen (über beide Controller, nächster Treffer)
-  let nearestBtn=null, nearestDist=Infinity, panelDistForLaser=[null,null];
-
-  for (let i=0;i<controllers.length;i++){
-    const c=controllers[i], laser=lasers[i];
+  // Kandidaten je Controller ermitteln
+  const panelHits = controllers.map((c, idx) => {
     const origin=new THREE.Vector3(), dir=new THREE.Vector3(0,0,-1);
     c.getWorldPosition(origin); dir.applyQuaternion(c.quaternion).normalize();
     raycaster.set(origin, dir);
 
-    // Panel-Distanz für Laser-Clamp
-    const hitPanel = raycaster.intersectObject(menu.panel, false)[0];
-    if (hitPanel){ panelDistForLaser[i]=hitPanel.distance; setLaserDistance(laser, hitPanel.distance); }
-    else { setLaserDistance(laser, 0.6); } // kurz halten, wenn kein Panel-Hit (zur Sicherheit)
+    // Panel-Hit
+    const hitPanel = raycaster.intersectObject(menu.panel, false)[0] || null;
+    // Sichtbarkeit & Länge des Lasers
+    if (hitPanel){ lasers[idx].visible = true; setLaserDistance(lasers[idx], hitPanel.distance); }
+    else { lasers[idx].visible = false; }
 
-    // Buttons: nur aktive/sichtbare
-    const hits = raycaster.intersectObjects(menu.getActiveButtons(), false);
-    if (hits.length && hits[0].distance < nearestDist){
-      nearestDist = hits[0].distance; nearestBtn = hits[0].object;
+    // Winkel-Gate zum Panelzentrum
+    let angleOk=false, angleDeg=999, toCenter=null;
+    if (hitPanel){
+      const center = menu.panel.getWorldPosition(new THREE.Vector3());
+      toCenter = new THREE.Vector3().subVectors(center, origin).normalize();
+      angleDeg = Math.acos(THREE.MathUtils.clamp(dir.dot(toCenter), -1, 1)) * 180/Math.PI;
+      angleOk = angleDeg <= ANGLE_MAX_DEG;
     }
+
+    // Button-Treffer: nur Buttons bis Paneldistanz (±EPS), verhindert „hinter Panel“
+    let nearestBtn=null, nearestDist=Infinity;
+    if (hitPanel && angleOk){
+      const hits = raycaster.intersectObjects(menu.getActiveButtons(), false)
+        .filter(h => h.distance <= hitPanel.distance + EPS_DIST);
+      if (hits.length){ nearestBtn = hits[0].object; nearestDist = hits[0].distance; }
+    }
+
+    return { idx, hitPanel, angleDeg, angleOk, nearestBtn, nearestDist };
+  });
+
+  // Aktiven Controller wählen (kleinster Winkel, dann Distanz), mit Hysterese
+  const valid = panelHits.filter(h => h.hitPanel && h.angleOk);
+  let best = null;
+  for (const h of valid){
+    if (!best) best = h;
+    else if (h.angleDeg < best.angleDeg - 0.5) best = h; // deutlicher besser
+    else if (Math.abs(h.angleDeg - best.angleDeg) < 0.5 && h.nearestDist < best.nearestDist) best = h;
   }
 
-  // Hysterese: Kandidat muss kurz stabil bleiben, bevor wir Hover wechseln
-  if (nearestBtn !== hoverCandidate){
-    hoverCandidate = nearestBtn;
-    hoverCandTime = 0;
+  if (best){
+    if (_activeCtrl === best.idx){
+      // bleibt aktiv
+    } else if (_activeCtrlCand === best.idx){
+      _activeCtrlCandMs += dt*1000;
+      if (_activeCtrlCandMs >= CTRL_STICKY_MS){ _activeCtrl = best.idx; _activeCtrlCand = -1; _activeCtrlCandMs = 0; }
+    } else {
+      _activeCtrlCand = best.idx; _activeCtrlCandMs = 0;
+    }
   } else {
-    hoverCandTime += dt*1000;
-    if (hoverCandidate !== hoveredBtn && hoverCandTime >= HOVER_STICKY_MS){
-      hoveredBtn = hoverCandidate;
-      menu.setHover(hoveredBtn);
-    }
+    _activeCtrl = -1; _activeCtrlCand = -1; _activeCtrlCandMs = 0;
   }
 
-  // Falls gar kein Kandidat mehr da -> Hover leeren
-  if (!nearestBtn && hoveredBtn){
-    hoveredBtn = null; menu.setHover(null);
+  // Hover-Kandidat nur vom aktiven Controller
+  let candBtn = null;
+  if (_activeCtrl !== -1){
+    candBtn = panelHits[_activeCtrl].nearestBtn || null;
+  }
+
+  // Hover-Hysterese
+  if (candBtn !== _hoverCand){ _hoverCand = candBtn; _hoverCandMs = 0; }
+  else { _hoverCandMs += dt*1000; }
+
+  if (_hoverCand !== _hoveredBtnStable && _hoverCandMs >= HOVER_STICKY_MS){
+    _hoveredBtnStable = _hoverCand;
+    menu.setHover(_hoveredBtnStable);
+  }
+  if (!_hoverCand && _hoveredBtnStable){
+    _hoveredBtnStable = null;
+    menu.setHover(null);
   }
 }
 
-// ---------- A/X Toggling (kein Thumbstick) ----------
+// ---------- A/X Toggling ----------
 function isRisingEdgeAX(gp, key, store){
   if (!gp || !gp.buttons) return false;
   const pressed = !!(gp.buttons[3]?.pressed) || !!(gp.buttons[4]?.pressed);
   const prev = !!store[key]; store[key]=pressed;
   return pressed && !prev;
 }
+let _pausedSpawnTimer = 0;
 function openMenuIngame(){
+  // pausieren + aktive Objekte eliminieren
   game.running=false; hud.plane.visible=false;
+  _pausedSpawnTimer = spawnTimer; // Spawnphase merken
+  clearActiveObjectsKeepScore();
+
   menu.placeAt(iPos, iForward);
   menu.setMode('ingame');
   menu.setVisible(true); setLasersVisible(true);
@@ -295,6 +343,7 @@ function openMenuIngame(){
 function closeMenuResume(){
   menu.setVisible(false); setLasersVisible(false);
   game.menuActive=false; game.running=true; hud.plane.visible=true;
+  spawnTimer = _pausedSpawnTimer; // dort weitermachen
 }
 
 // ---------- Loop ----------
@@ -304,7 +353,7 @@ let spawnTimer=0, sideSwitch=1;
 function loop(){
   const dt=clock.getDelta();
 
-  // A/X Face-Buttons (beide Controller)
+  // A/X Face-Buttons
   const session=renderer.xr.getSession?.();
   if (session){
     if (!loop._btnPrev) loop._btnPrev = {};
