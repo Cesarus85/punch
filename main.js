@@ -75,7 +75,7 @@ function lockInitialPose(){
 renderer.xr.addEventListener('sessionstart', ()=>{ poseLocked=false; });
 
 /* =========================================================
-   HUD + Back-to-Menu Button
+   HUD + Back-to-Menu Button (World-Space unter HUD)
 ========================================================= */
 const hud = createHUD(scene);
 hud.plane.renderOrder = 10;
@@ -109,15 +109,24 @@ function drawUIButton(btn){
   ctx.fillText(label, (W-tw)/2, H*0.66);
   tex.needsUpdate = true;
 }
-// vorher:
-// const backBtn = makeUIButton('Zurück zum Menü', 0.62, 0.16);
-// backBtn.position.set(0, -0.12, 0.002);
-// nachher:
 const backBtn = makeUIButton('Zurück zum Menü', 0.58, 0.14);
-backBtn.position.set(0, -0.52, 0.002); // tiefer, kein Overlap mit HUD
-hud.plane.add(backBtn);
-backBtn.position.set(0, -0.12, 0.002);
+scene.add(backBtn);                         // World-Space, nicht mehr Kind vom HUD
+backBtn.material.depthTest = false;
 backBtn.renderOrder = 11;
+backBtn.visible = false;
+
+const BACK_BTN_OFFSET_M = 0.24; // Abstand unterhalb des HUD
+function placeBackButton(){
+  // Button unter dem HUD platzieren – gleiche Orientierung
+  hud.plane.updateMatrixWorld();
+  _v1.setFromMatrixPosition(hud.plane.matrixWorld);
+  const upLocal  = _v2.set(0,1,0).applyQuaternion(hud.plane.quaternion);
+  const fwdLocal = _v3.set(0,0,1).applyQuaternion(hud.plane.quaternion);
+  backBtn.position.copy(_v1)
+    .addScaledVector(upLocal, -BACK_BTN_OFFSET_M) // tiefer als HUD
+    .addScaledVector(fwdLocal, 0.012);            // minimal nach vorne
+  backBtn.quaternion.copy(hud.plane.quaternion);
+}
 
 /* =========================================================
    Fäuste (Controller/Hände)
@@ -464,7 +473,7 @@ for (const c of controllers){
       const hit = intersectMesh(c, backBtn);
       if (hit){
         hideBackToMenuButton();
-        hud.plane.visible = false; 
+        hud.plane.visible = false;   // HUD aus, wenn Menü aufgeht
         menu.placeAt(iPos, iForward);
         menu.setMode('prestart');
         menu.setVisible(true);
@@ -529,6 +538,7 @@ function closeMenuResume(){
 }
 function showBackToMenuButton(){
   backBtn.visible = true;
+  placeBackButton();     // sofort korrekt platzieren
   setLasersVisible(true);
   menu.setVisible(false);
   game.menuActive = false;
@@ -587,6 +597,7 @@ function loop(){
     }
     menu.setHover(bestHit ? menu.pickButtonAtWorldPoint(bestHit.point) : null);
   } else if (backBtn.visible){
+    placeBackButton(); // Button pro Frame unter dem HUD halten
     let bestHit=null;
     for (let i=0;i<controllers.length;i++){
       const c=controllers[i];
