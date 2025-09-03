@@ -14,7 +14,7 @@ import {
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall } from './ball.js';
-import { createHazard } from './hazard.js';
+import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
@@ -263,12 +263,6 @@ function flashSpawnRingAt(pos){
   _debugRing.visible = true; _debugRingTimer = DEBUG_HAZARD_RING_MS/1000;
 }
 
-/* ======================= Object Pooling ======================= */
-const hazardPool = [];
-const MAX_POOL_HAZ = 32;
-function getPooledHazard(){ return hazardPool.pop() || createHazard(); }
-function recycleHazard(mesh){ if (!mesh) return; mesh.visible=false; mesh.position.set(0,-999,0); if (hazardPool.length<MAX_POOL_HAZ) hazardPool.push(mesh); }
-
 /* =========================== Spawner =========================== */
 const MAX_ACTIVE_BODIES = 40;
 function randRange(a,b){ return a + Math.random()*(b-a); }
@@ -280,7 +274,7 @@ function isSpawnPosClear(p){
     if (b.position.distanceToSquared(p) < minDistSq) return false;
   }
   for (const h of hazards){
-    if (h.obj.position.distanceToSquared(p) < minDistSq) return false;
+    if (h.position.distanceToSquared(p) < minDistSq) return false;
   }
   return true;
 }
@@ -369,10 +363,26 @@ function spawnHazard(sideSign){
 
     if (!isSpawnPosClear(_v1)) continue;
 
-    const obj = getPooledHazard(); obj.visible = true; obj.position.copy(_v1); scene.add(obj);
+    const idx = allocHazard();
+    if (idx===undefined) continue;
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
-    const prevDot = _v3.subVectors(obj.position, iPos).dot(iForward);
-    hazards.push({ obj, velocity: velocity.clone(), alive:true, prevDot });
+    const spin = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.4,1.5,Math.random());
+    const driftAmp = randRange(DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE);
+    const f = randRange(DRIFT_MIN_FREQ, DRIFT_MAX_FREQ);
+    const driftOmega = 2*Math.PI*f;
+    const driftPhase = Math.random()*Math.PI*2;
+    const prevDot = _v3.subVectors(_v1, iPos).dot(iForward);
+    hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase });
+    _m1.makeTranslation(_v1.x,_v1.y,_v1.z);
+    getHazardMesh().setMatrixAt(idx,_m1);
+    getHazardMesh().instanceMatrix.needsUpdate = true;
+    const attr = getHazardAttribute();
+    const aIndex = idx*4;
+    attr.array[aIndex+0] = spin;
+    attr.array[aIndex+1] = driftAmp;
+    attr.array[aIndex+2] = driftOmega;
+    attr.array[aIndex+3] = driftPhase;
+    attr.needsUpdate = true;
     return _v1.clone();
   }
 
@@ -409,7 +419,7 @@ function onBallMiss(b){
   misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40); updateHUD();
 }
 function onHazardHit(h){
-  h.alive=false; scene.remove(h.obj); recycleHazard(h.obj);
+  h.alive=false; freeHazard(h.index);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound(); rumble(1.0,80); updateHUD();
 }
@@ -431,13 +441,13 @@ function fistsHitHazard(p,fists){
 /* ========================= Round Control ========================= */
 function hardResetRound(){
   for (const b of [...balls]){ freeBall(b.index); }
-  for (const h of [...hazards]){ scene.remove(h.obj); recycleHazard(h.obj); }
+  for (const h of [...hazards]){ freeHazard(h.index); }
   balls.length=0; hazards.length=0; hits=0; misses=0; score=0; streak=0; hazardHits=0;
   updateHUD('');
 }
 function clearActiveObjectsKeepScore(){
   for (const b of [...balls]){ freeBall(b.index); }
-  for (const h of [...hazards]){ scene.remove(h.obj); recycleHazard(h.obj); }
+  for (const h of [...hazards]){ freeHazard(h.index); }
   balls.length=0; hazards.length=0;
 }
 
@@ -538,6 +548,8 @@ function loop(){
   elapsed += dt;
   const shader = getBallMesh()?.material?.userData?.shader;
   if (shader) shader.uniforms.uTime.value = elapsed;
+  const hShader = getHazardMesh()?.material?.userData?.shader;
+  if (hShader) hShader.uniforms.uTime.value = elapsed;
 
   // A/X Face-Buttons
   const session = renderer.xr.getSession?.();
@@ -678,27 +690,40 @@ function loop(){
   // Hazards – Update (inkl. Körpertreffer)
   for (let i=hazards.length-1;i>=0;i--){
     const h=hazards[i]; if(!h.alive){ hazards.splice(i,1); continue; }
-    h.obj.position.addScaledVector(h.velocity, dt);
-    const ax=h.obj.userData.spinAxis, sp=h.obj.userData.spinSpeed;
-    if(ax&&sp) h.obj.rotateOnAxis(ax, sp*dt);
+    h.basePos.addScaledVector(h.velocity, dt);
+    if (h.driftAmp>0 && h.driftOmega>0){
+      h.t += dt; const lat = h.driftAmp*Math.sin(h.driftOmega*h.t + h.driftPhase);
+      h.position.copy(h.basePos).addScaledVector(iRight, lat);
+    } else {
+      h.position.copy(h.basePos);
+    }
+    _m1.makeTranslation(h.basePos.x, h.basePos.y, h.basePos.z);
+    getHazardMesh().setMatrixAt(h.index,_m1);
 
-    const p = h.obj.getWorldPosition(_v1);
+    const p = h.position;
     if (fistsHitHazard(p,fists) || hazardHitsBody(p)){ onHazardHit(h); hazards.splice(i,1); continue; }
 
-    const dot = _v2.subVectors(h.obj.position, iPos).dot(iForward);
-    if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.alive=false; scene.remove(h.obj); recycleHazard(h.obj); hazards.splice(i,1); continue; }
-    if (dot<-6.0){ h.alive=false; scene.remove(h.obj); recycleHazard(h.obj); hazards.splice(i,1); }
+    const dot = _v2.subVectors(h.position, iPos).dot(iForward);
+    if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); continue; }
+    if (dot<-6.0){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); }
+    h.prevDot = dot;
   }
+  getHazardMesh().instanceMatrix.needsUpdate = true;
 
   updateHUD(countdown.active ? '' : (game.menuActive ? 'Konfigurieren & Starten' : (backBtn.visible ? 'Zeit abgelaufen' : '')));
   renderer.render(scene, camera);
 }
 
 /* ========================= Start/Shutdown ========================= */
-async function start(){ try{ await loadBall(); scene.add(getBallMesh()); }catch(e){ console.error('ball.glb konnte nicht geladen werden:', e); } renderer.setAnimationLoop(loop); }
+async function start(){
+  try{ await loadBall(); scene.add(getBallMesh()); }
+  catch(e){ console.error('ball.glb konnte nicht geladen werden:', e); }
+  scene.add(getHazardMesh());
+  renderer.setAnimationLoop(loop);
+}
 renderer.xr.addEventListener('sessionend', ()=>{
   for (const b of balls){ freeBall(b.index); }
-  for (const h of hazards){ scene.remove(h.obj); recycleHazard(h.obj); }
+  for (const h of hazards){ freeHazard(h.index); }
   balls.length=0; hazards.length=0;
   if (_debugRing){ scene.remove(_debugRing); _debugRing=null; }
   menu.setVisible(false); setLasersVisible(false); hideBackToMenuButton();
