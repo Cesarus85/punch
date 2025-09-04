@@ -642,6 +642,18 @@ function loop(){
     }
   }
 
+  // "V"-Geste (Zeige- und Mittelfinger gestreckt) zum Öffnen/Schließen des Menüs
+  if (!loop._vPrev) loop._vPrev = {};
+  for (let i=0;i<2;i++){
+    const key = `hand${i}`;
+    const v = fistsMgr.isVGesture(i);
+    if (v && !loop._vPrev[key]){
+      if (game.running && !game.menuActive) openMenuIngame();
+      else if (game.menuActive)            closeMenuResume();
+    }
+    loop._vPrev[key] = v;
+  }
+
   if (renderer.xr.isPresenting && !poseLocked){ lockInitialPose(); updateHUD('Konfigurieren & Starten'); }
 
   // Menü / Back-Button Hover + Laser

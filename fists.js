@@ -64,6 +64,48 @@ export class FistsManager {
     return false;
   }
 
+  _getJointPos(i, name, out){
+    const hand = this.hands[i];
+    const joint = hand && hand.joints ? hand.joints[name] : null;
+    if (joint && joint.visible){
+      joint.getWorldPosition(out);
+      return true;
+    }
+    return false;
+  }
+
+  // Prüft, ob Zeige- und Mittelfinger gestreckt sind und die restlichen gebeugt
+  // sind, um das "V"-Zeichen zu erkennen.
+  isVGesture(i){
+    const indexTip = new THREE.Vector3(), indexBase = new THREE.Vector3();
+    const middleTip = new THREE.Vector3(), middleBase = new THREE.Vector3();
+    const ringTip = new THREE.Vector3(), ringBase = new THREE.Vector3();
+    const pinkyTip = new THREE.Vector3(), pinkyBase = new THREE.Vector3();
+    const thumbTip = new THREE.Vector3(), thumbBase = new THREE.Vector3();
+
+    const ok =
+      this._getJointPos(i, 'index-finger-tip', indexTip) &&
+      this._getJointPos(i, 'index-finger-metacarpal', indexBase) &&
+      this._getJointPos(i, 'middle-finger-tip', middleTip) &&
+      this._getJointPos(i, 'middle-finger-metacarpal', middleBase) &&
+      this._getJointPos(i, 'ring-finger-tip', ringTip) &&
+      this._getJointPos(i, 'ring-finger-metacarpal', ringBase) &&
+      this._getJointPos(i, 'pinky-finger-tip', pinkyTip) &&
+      this._getJointPos(i, 'pinky-finger-metacarpal', pinkyBase) &&
+      this._getJointPos(i, 'thumb-tip', thumbTip) &&
+      this._getJointPos(i, 'thumb-metacarpal', thumbBase);
+    if (!ok) return false;
+
+    const EXT = 0.06, BEND = 0.05;
+    const indexExtended = indexTip.distanceTo(indexBase) > EXT;
+    const middleExtended = middleTip.distanceTo(middleBase) > EXT;
+    const ringBent = ringTip.distanceTo(ringBase) < BEND;
+    const pinkyBent = pinkyTip.distanceTo(pinkyBase) < BEND;
+    const thumbBent = thumbTip.distanceTo(thumbBase) < BEND;
+
+    return indexExtended && middleExtended && ringBent && pinkyBent && thumbBent;
+  }
+
   update(dt) {
     const fists = [];
     const alpha = THREE.MathUtils.clamp(dt * 12.0, 0, 1); // smoothing
