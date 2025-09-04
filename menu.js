@@ -108,10 +108,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   group.add(hitPlane);
 
   // Titel
+  const rowY_title = 0.72;
   const title = makeCanvasPlane(1.48, 0.16);
   title.userData.kind = 'title';
   drawTitle(title, 'Spieleinstellungen');
-  title.position.set(0, 0.56, 0.007);
+  title.position.set(0, rowY_title, 0.007);
   group.add(title);
 
   // Labels
