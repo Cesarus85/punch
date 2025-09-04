@@ -47,13 +47,18 @@ document.body.appendChild(
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 const hitParticles = new HitParticles();
 scene.add(hitParticles.points);
-window.addEventListener('resize', ()=>renderer.setSize(window.innerWidth, window.innerHeight));
+window.addEventListener('resize', () => {
+  if (!renderer.xr.isPresenting) {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+});
 
 renderer.xr.addEventListener('sessionstart', ()=>{
   poseLocked = false;
   renderer.setPixelRatio(1.2);
   if (renderer.xr.setFoveation) renderer.xr.setFoveation(1.0);
-  if (renderer.xr.setFramebufferScaleFactor) renderer.xr.setFramebufferScaleFactor(0.85);
+  if (renderer.xr.isPresenting && renderer.xr.setFramebufferScaleFactor)
+    renderer.xr.setFramebufferScaleFactor(0.85);
 
   // Detect DOM overlay support; disable flash effects if unavailable
   const session = renderer.xr.getSession();
@@ -819,6 +824,8 @@ async function start(){
   renderer.setAnimationLoop(loop);
 }
 renderer.xr.addEventListener('sessionend', ()=>{
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setSize(window.innerWidth, window.innerHeight);
   for (const b of balls){ freeBall(b.index); }
   for (const h of hazards){ freeHazard(h.index); }
   balls.length=0; hazards.length=0;
