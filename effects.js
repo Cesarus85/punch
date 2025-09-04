@@ -1,3 +1,5 @@
+import * as THREE from './three.js';
+
 let overlay;
 function ensureOverlay(){
   if (!overlay){
@@ -54,3 +56,22 @@ function startHazardFlash(){
 }
 
 export const hazardFlash = { start: startHazardFlash };
+
+// Fallback effect for environments without DOM overlay
+let hazardPlane;
+export function initHazardFlashFallback(camera){
+  if (hazardPlane) return;
+  const geo = new THREE.PlaneGeometry(2, 2);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.35, depthWrite: false });
+  hazardPlane = new THREE.Mesh(geo, mat);
+  hazardPlane.visible = false;
+  hazardPlane.renderOrder = 10000;
+  hazardPlane.position.set(0, 0, -0.5);
+  camera.add(hazardPlane);
+}
+
+export function hazardFlashFallback(){
+  if (!hazardPlane) return;
+  hazardPlane.visible = true;
+  setTimeout(()=>{ hazardPlane.visible = false; }, 300);
+}

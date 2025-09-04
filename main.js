@@ -20,7 +20,7 @@ import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHaz
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
-import { flashHit, flashMiss, hazardFlash } from './effects.js';
+import { flashHit, flashMiss, hazardFlash, initHazardFlashFallback, hazardFlashFallback } from './effects.js';
 import { HitParticles } from './hitParticles.js';
 
 /* ============================ Renderer ============================ */
@@ -65,6 +65,7 @@ renderer.xr.addEventListener('sessionstart', ()=>{
   domOverlayActive = !!session?.domOverlayState;
   if (!domOverlayActive) {
     console.warn('dom-overlay not available, using reduced visual effects');
+    initHazardFlashFallback(camera);
   }
 });
 
@@ -486,6 +487,7 @@ function onHazardHit(h){
   // Emphasize hazard impact with short, high-intensity rumble
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
   if (domOverlayActive) hazardFlash.start();
+  else hazardFlashFallback();
   updateHUD();
 }
 
