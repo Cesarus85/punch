@@ -19,6 +19,9 @@ export function createHUD(scene){
     note: '' // kurze Hinweise wie "Zeit!"
   };
 
+  let hazardFlashActive = false;
+  let hazardFlashTimeout;
+
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -67,6 +70,11 @@ export function createHUD(scene){
       ctx.fillText(state.note, 24, 308);
     }
 
+    if (hazardFlashActive){
+      ctx.fillStyle = 'rgba(255,0,0,0.35)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+
     tex.needsUpdate = true;
   }
   draw();
@@ -90,5 +98,15 @@ export function createHUD(scene){
     plane.rotateX(THREE.MathUtils.degToRad(HUD_TILT_DEG));
   }
 
-  return { plane, set, place };
+  function flashHazard(){
+    hazardFlashActive = true;
+    draw();
+    clearTimeout(hazardFlashTimeout);
+    hazardFlashTimeout = setTimeout(()=>{
+      hazardFlashActive = false;
+      draw();
+    }, 300);
+  }
+
+  return { plane, set, place, flashHazard };
 }
