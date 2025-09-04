@@ -1,5 +1,3 @@
-import * as THREE from './three.js';
-
 let overlay;
 function ensureOverlay(){
   if (!overlay){
@@ -59,29 +57,3 @@ function startHazardFlash(){
 }
 
 export const hazardFlash = { start: startHazardFlash };
-
-// Plane-based hazard flash effect
-let hazardPlane;
-export function createHazardPlane(camera){
-  const material = new THREE.MeshBasicMaterial({
-    color: 0xff0000,
-    transparent: true,
-    opacity: 0,
-    side: THREE.DoubleSide,
-    depthTest: false
-  });
-  hazardPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
-  hazardPlane.position.set(0, 0, -0.4); // weiter vor die Kamera
-  hazardPlane.renderOrder = 9999;
-  camera.add(hazardPlane);
-  if (camera.near > 0.01) {
-    camera.near = 0.01;
-    camera.updateProjectionMatrix();
-  }
-}
-
-export function flashHazardPlane(){
-  if (!hazardPlane) return;
-  hazardPlane.material.opacity = 0.4;
-  setTimeout(() => hazardPlane.material.opacity = 0, 300);
-}
