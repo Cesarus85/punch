@@ -477,6 +477,7 @@ function onHazardHit(h){
   // Emphasize hazard impact with short, high-intensity rumble
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
   hazardFlash.start();
+  hud.flashHazard();
   updateHUD();
 }
 
@@ -490,6 +491,7 @@ function onHazardFistHit(h){
   if (AUDIO_ENABLED) penaltySound();
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
   hazardFlash.start();
+  hud.flashHazard();
   updateHUD();
 }
 
