@@ -14,7 +14,7 @@ export class HitParticles {
     this.geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities,3));
     this.geometry.setAttribute('life', new THREE.BufferAttribute(life,1));
     this.geometry.computeBoundingSphere();
-    this.material = new THREE.PointsMaterial({ color:0xffffff, size:0.02, transparent:true, depthWrite:false });
+    this.material = new THREE.PointsMaterial({ color:0xffffff, size:0.01, transparent:true, depthWrite:false });
     this.points = new THREE.Points(this.geometry, this.material);
     this.positions = positions;
     this.velocities = velocities;
@@ -45,7 +45,7 @@ export class HitParticles {
       this.positions[off+1] = pos.y;
       this.positions[off+2] = pos.z;
       const dir = new THREE.Vector3(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1).normalize();
-      const speed = Math.random()*1.5 + 0.5;
+      const speed = Math.random()*1.0 + 0.2;
       this.velocities[off] = dir.x*speed;
       this.velocities[off+1] = dir.y*speed;
       this.velocities[off+2] = dir.z*speed;

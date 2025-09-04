@@ -35,7 +35,7 @@ export const HAPTICS_ENABLED = true;
 
 // --- Effects ---
 export const DISSOLVE_DURATION = 0.4;  // s
-export const HIT_PARTICLE_COUNT = 40;
+export const HIT_PARTICLE_COUNT = 80;
 
 // --- Hazards (Step 4) ---
 export const HAZARD_ENABLED = true;
