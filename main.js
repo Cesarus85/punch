@@ -16,7 +16,7 @@ import {
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
-import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard } from './hazard.js';
+import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
@@ -462,7 +462,10 @@ function onBallMiss(b){
   updateHUD();
 }
 function onHazardHit(h){
-  h.alive=false; freeHazard(h.index);
+  h.alive=false;
+  dissolveHazard(h.index, elapsed);
+  hitParticles.burst(h.position.clone());
+  setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
   // Emphasize hazard impact with short, high-intensity rumble
