@@ -46,6 +46,14 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 const hitParticles = new HitParticles();
 scene.add(hitParticles.points);
 createHazardPlane(camera);
+
+renderer.xr.addEventListener('sessionstart', () => {
+  createHazardPlane(renderer.xr.getCamera(camera));
+});
+
+renderer.xr.addEventListener('sessionend', () => {
+  createHazardPlane(camera);
+});
 window.addEventListener('resize', () => {
   if (!renderer.xr.isPresenting) {
     renderer.setSize(window.innerWidth, window.innerHeight);

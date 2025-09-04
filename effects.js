@@ -63,11 +63,27 @@ export const hazardFlash = { start: startHazardFlash };
 // Plane-based hazard flash effect
 let hazardPlane;
 export function createHazardPlane(camera){
-  const geometry = new THREE.PlaneGeometry(2, 2);
-  const material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0 });
-  hazardPlane = new THREE.Mesh(geometry, material);
-  hazardPlane.position.set(0, 0, -0.01);
-  camera.add(hazardPlane); // 0.01 vor der Kamera positionieren
+  if (!hazardPlane){
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    });
+    hazardPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    hazardPlane.renderOrder = 9999;
+  }
+  hazardPlane.position.set(0, 0, -0.4); // weiter vor die Kamera
+  if (hazardPlane.parent) {
+    hazardPlane.parent.remove(hazardPlane);
+  }
+  camera.add(hazardPlane);
+  if (camera.near > 0.01) {
+    camera.near = 0.01;
+    camera.updateProjectionMatrix();
+  }
 }
 
 export function flashHazardPlane(){
