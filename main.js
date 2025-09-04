@@ -452,13 +452,13 @@ function onHazardHit(h){
 function fistsHit(p,fists){
   for(const f of fists){
     _v5.subVectors(p, f.pos);
-    if (_v5.length() <= (BALL_RADIUS+FIST_RADIUS) && f.vel.length()>=PUNCH_SPEED && _v5.dot(f.vel)>0) return true;
+    if (_v5.length() <= (BALL_RADIUS+FIST_RADIUS)) return true;
   } return false;
 }
 function fistsHitHazard(p,fists){
   for(const f of fists){
     _v5.subVectors(p, f.pos);
-    if (_v5.length() <= (HAZARD_RADIUS+FIST_RADIUS) && f.vel.length()>=PUNCH_SPEED && _v5.dot(f.vel)>0) return true;
+    if (_v5.length() <= (HAZARD_RADIUS+FIST_RADIUS)) return true;
   } return false;
 }
 
