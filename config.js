@@ -14,7 +14,7 @@ export const MIN_SPAWN_DISTANCE = 0.35; // m Mindestabstand zwischen Spawns
 
 // --- HUD ---
 export const HUD_FORWARD = 1.0;         // m vor initialer Position
-export const HUD_RIGHT = 0.10;          // m nach rechts (10 cm)
+export const HUD_RIGHT = -0.05;         // m nach links (5 cm)
 export const HUD_TILT_DEG = 20;         // Grad Neigung nach oben
 export const HUD_PLANE_W = 0.50;
 export const HUD_PLANE_H = 0.25;        // Unterkante auf Boden (Center = H/2)
