@@ -39,9 +39,9 @@ function ensureHazardOverlay(){
     hazardOverlay.style.height = '100%';
     hazardOverlay.style.pointerEvents = 'none';
     hazardOverlay.style.opacity = '0';
-    hazardOverlay.style.transition = 'opacity 200ms'; //vorher 100ms
-    hazardOverlay.style.boxShadow = '0 0 0 20px rgba(255,0,0,0.35) inset'; //vorher 0.9
-    hazardOverlay.style.background = 'transparent';
+    hazardOverlay.style.transition = 'opacity 300ms'; //vorher 100ms
+    hazardOverlay.style.background = 'rgba(255,0,0,0.4)';
+    hazardOverlay.style.boxShadow = '0 0 0 200px rgba(255,0,0,0.6) inset';
     hazardOverlay.style.zIndex = '10000';
     document.body.appendChild(hazardOverlay);
   }
