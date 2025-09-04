@@ -7,6 +7,7 @@ import {
   DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
   AUDIO_ENABLED, HAPTICS_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
+  HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION,
   DEBUG_HAZARD_RING_MS,
   MIN_SPAWN_DISTANCE,
   DISSOLVE_DURATION
@@ -458,7 +459,8 @@ function onHazardHit(h){
   h.alive=false; freeHazard(h.index);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
-  rumble(1.0,80);
+  // Emphasize hazard impact with short, high-intensity rumble
+  rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
   hazardFlash.start();
   updateHUD();
 }

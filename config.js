@@ -46,6 +46,9 @@ export const HAZARD_SPEED = BALL_SPEED;
 export const HAZARD_PENALTY = 2;
 export const HAZARD_COLOR = 0xff4242;
 export const HAZARD_EMISSIVE_INTENSITY = 0.9; // damit Hazards „leuchten“ und immer sichtbar sind
+// Kurzer, starker Rumble bei Hazard-Treffern
+export const HAZARD_RUMBLE_INTENSITY = 1.0;   // volle Intensität
+export const HAZARD_RUMBLE_DURATION = 55;     // ms, kurz und kräftig
 
 // --- Debug ---
 export const DEBUG_HAZARD_RING_MS = 0;      // 0 = aus; kurzer Ring-Flash am Hazard-Spawn
