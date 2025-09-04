@@ -57,6 +57,9 @@ renderer.xr.addEventListener('sessionstart', ()=>{
   if (renderer.xr.setFoveation) renderer.xr.setFoveation(1.0);
   if (renderer.xr.isPresenting && renderer.xr.setFramebufferScaleFactor)
     renderer.xr.setFramebufferScaleFactor(0.85);
+  
+  // Initialisiere VR-Vignette für Hazard-Feedback
+  hazardFlash.initVR(scene, camera);
 });
 
 /* =================== Initial Pose (feste Blickrichtung) =================== */
@@ -643,6 +646,7 @@ function loop(){
 
   // Menü / Back-Button Hover + Laser
   if (game.menuActive){
+    menu.updateAnimation(performance.now());
     let bestHit=null;
     for (let i=0;i<controllers.length;i++){
       const c=controllers[i]; const hit = intersectHitPlane(c);
@@ -805,6 +809,11 @@ function loop(){
     h.prevDot = dot;
   }
   getHazardMesh().instanceMatrix.needsUpdate = true;
+
+  // Update VR-Vignette Position und Animation
+  if (renderer.xr.isPresenting) {
+    hazardFlash.updateVR(camera, performance.now());
+  }
 
   updateHUD(countdown.active ? '' : (game.menuActive ? 'Konfigurieren & Starten' : (backBtn.visible ? 'Zeit abgelaufen' : '')));
   renderer.render(scene, camera);

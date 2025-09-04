@@ -5,48 +5,129 @@ function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024; canvas.height = 256;
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite:false });
+  tex.magFilter = THREE.LinearFilter;
+  const mat = new THREE.MeshBasicMaterial({ 
+    map: tex, 
+    transparent: true, 
+    depthWrite: false,
+    depthTest: false,
+    fog: false
+  });
   const geo = new THREE.PlaneGeometry(w, h);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData._ctx = ctx;
   mesh.userData._tex = tex;
+  mesh.renderOrder = 100;
   return mesh;
 }
 function drawTitle(mesh, text) {
   const ctx = mesh.userData._ctx, tex = mesh.userData._tex;
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = '#ffffff';
+  
+  // Gradient für Titel
+  const gradient = ctx.createLinearGradient(0, 0, W, 0);
+  gradient.addColorStop(0, '#00e5ff');
+  gradient.addColorStop(0.5, '#ffffff');
+  gradient.addColorStop(1, '#00e5ff');
+  
   let size = 110;
   while (size >= 60) {
-    ctx.font = `bold ${size}px system-ui, Arial`;
+    ctx.font = `bold ${size}px 'Segoe UI', system-ui, Arial`;
     const tw = ctx.measureText(text).width;
     if (tw <= W - 80) break;
     size -= 4;
   }
+  
   const tw = ctx.measureText(text).width;
-  ctx.fillText(text, (W - tw)/2, H*0.70);
+  const x = (W - tw)/2;
+  const y = H*0.70;
+  
+  // Schatten
+  ctx.shadowColor = 'rgba(0, 229, 255, 0.5)';
+  ctx.shadowBlur = 20;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2;
+  
+  ctx.fillStyle = gradient;
+  ctx.fillText(text, x, y);
+  
+  ctx.shadowColor = 'transparent';
+  tex.needsUpdate = true;
+}
+function drawGameName(mesh, text) {
+  const ctx = mesh.userData._ctx, tex = mesh.userData._tex;
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+  
+  // Verkeilte/schräge Transformation
+  ctx.save();
+  ctx.transform(1, 0, -0.15, 1, 0, 0); // Schräg nach rechts geneigt
+  
+  let size = 140;
+  while (size >= 80) {
+    ctx.font = `bold italic ${size}px 'Impact', 'Arial Black', system-ui`;
+    const tw = ctx.measureText(text).width;
+    if (tw <= W - 80) break;
+    size -= 4;
+  }
+  
+  const tw = ctx.measureText(text).width;
+  const x = (W - tw)/2;
+  const y = H*0.70;
+  
+  // Gradient für dynamischen Look
+  const gradient = ctx.createLinearGradient(x, y-size*0.7, x+tw, y);
+  gradient.addColorStop(0, '#ff6b35');
+  gradient.addColorStop(0.5, '#f7931e');
+  gradient.addColorStop(1, '#ffcc02');
+  
+  // Schatten für Tiefe
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
+  
+  ctx.fillStyle = gradient;
+  ctx.fillText(text, x, y);
+  
+  ctx.restore();
+  ctx.shadowColor = 'transparent';
   tex.needsUpdate = true;
 }
 function drawLabel(mesh, text) {
   const ctx = mesh.userData._ctx, tex = mesh.userData._tex;
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = '#ffffff';
+  
   let size = 80;
   while (size >= 40) {
-    ctx.font = `bold ${size}px system-ui, Arial`;
+    ctx.font = `600 ${size}px 'Segoe UI', system-ui, Arial`;
     const tw = ctx.measureText(text).width;
     if (tw <= W - 80) break;
     size -= 4;
   }
+  
   const tw = ctx.measureText(text).width;
-  ctx.fillText(text, (W - tw)/2, H*0.70);
+  const x = (W - tw)/2;
+  const y = H*0.70;
+  
+  // Subtiler Schatten
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 1;
+  
+  ctx.fillStyle = '#e8f4fd';
+  ctx.fillText(text, x, y);
+  
+  ctx.shadowColor = 'transparent';
   tex.needsUpdate = true;
 }
-function makeLabel(w=1.48, h=0.10) {
+function makeLabel(w=1.20, h=0.10) {
   const mesh = makeCanvasPlane(w, h);
   mesh.userData.kind = 'label';
   return mesh;
@@ -65,29 +146,118 @@ function makeButton(label, w=0.42, h=0.14) {
 function drawButton(btn) {
   const { _ctx:ctx, _tex:tex, label, selected, hover, disabled } = btn.userData;
   const W = ctx.canvas.width, H = ctx.canvas.height;
+  const cornerRadius = 32;
+  
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = disabled ? '#444c' : '#222c';
-  ctx.fillRect(0,0,W,H);
-  if (selected && !disabled) {
-    ctx.fillStyle = '#1e88e5aa';
-    ctx.fillRect(0,0,W,H);
+  
+  // Abgerundetes Rechteck zeichnen
+  function roundRect(x, y, width, height, radius, fill = true, stroke = false) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
   }
+  
+  // Button-Hintergrund mit Verlauf
+  if (disabled) {
+    ctx.fillStyle = 'rgba(60, 60, 60, 0.4)';
+  } else if (selected) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+    gradient.addColorStop(0, 'rgba(0, 229, 255, 0.8)');
+    gradient.addColorStop(1, 'rgba(30, 136, 229, 0.9)');
+    ctx.fillStyle = gradient;
+  } else {
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+    gradient.addColorStop(0, 'rgba(70, 80, 95, 0.85)');
+    gradient.addColorStop(1, 'rgba(50, 60, 75, 0.9)');
+    ctx.fillStyle = gradient;
+  }
+  
+  roundRect(8, 8, W-16, H-16, cornerRadius, true, false);
+  
+  // Hover-Effekt
   if (hover && !disabled) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 10;
-    ctx.strokeRect(6,6,W-12,H-12);
+    ctx.strokeStyle = selected ? '#ffffff' : '#00e5ff';
+    ctx.lineWidth = 6;
+    ctx.shadowColor = selected ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 229, 255, 0.8)';
+    ctx.shadowBlur = 15;
+    roundRect(8, 8, W-16, H-16, cornerRadius, false, true);
+    ctx.shadowColor = 'transparent';
   }
-  ctx.fillStyle = disabled ? '#bbb' : '#fff';
-  ctx.font = 'bold 96px system-ui, Arial';
+  
+  // Text
+  ctx.fillStyle = disabled ? '#999' : '#fff';
+  ctx.font = `600 96px 'Segoe UI', system-ui, Arial`;
   const tw = ctx.measureText(label).width;
-  ctx.fillText(label, (W - tw)/2, H*0.66);
+  const x = (W - tw)/2;
+  const y = H*0.66;
+  
+  if (!disabled) {
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 2;
+  }
+  
+  ctx.fillText(label, x, y);
+  ctx.shadowColor = 'transparent';
   tex.needsUpdate = true;
 }
-function makePanelBG(w=1.80, h=2.20) { // größer, damit alle Buttons sicher drin sind
-  const mat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.64, depthWrite:false });
+function makePanelBG(w=1.80, h=2.70) {
+  // Erstelle Shader-Material für glasartigen Hintergrund
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    fog: false,
+    uniforms: {
+      uTime: { value: 0 }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec2 vUv;
+      
+      void main() {
+        vec2 center = vec2(0.5, 0.5);
+        float dist = distance(vUv, center);
+        
+        // Subtiler animierter Gradient
+        float wave = sin(uTime * 0.5 + dist * 8.0) * 0.02;
+        float alpha = 0.75 + wave;
+        
+        // Hellerer glasartiger Effekt mit blauem Schimmer
+        vec3 baseColor = vec3(0.18, 0.22, 0.35);
+        vec3 accentColor = vec3(0.0, 0.9, 1.0);
+        
+        // Randverlauf
+        float edgeGlow = 1.0 - smoothstep(0.0, 0.1, dist);
+        vec3 color = mix(baseColor, baseColor + accentColor * 0.25, edgeGlow);
+        
+        gl_FragColor = vec4(color, alpha * 0.75);
+      }
+    `
+  });
+  
   const geo = new THREE.PlaneGeometry(w, h, 1, 1);
   const m = new THREE.Mesh(geo, mat);
   m.name = 'menuPanel';
+  m.userData.material = mat;
+  m.renderOrder = 99;
   return m;
 }
 
@@ -95,20 +265,46 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
-  const panel = makePanelBG(1.80, 2.20);
+  const panel = makePanelBG(1.80, 2.70);
   group.add(panel);
 
   // Unsichtbare Hit-Plane knapp vor den Buttons für Ray-Treffer/Laser
   const hitPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.80, 2.20, 1, 1),
+    new THREE.PlaneGeometry(1.80, 2.70, 1, 1),
     new THREE.MeshBasicMaterial({ transparent:true, opacity:0.0, depthWrite:false })
   );
   hitPlane.position.z = 0.006;
   hitPlane.name = 'menuHitPlane';
   group.add(hitPlane);
 
-  // Titel
-  const rowY_title = 0.72;
+  // Logo und Spielname
+  const rowY_logo = 1.15;
+  const rowY_title = 0.85;
+  
+  // Logo laden und anzeigen
+  const logoTexture = new THREE.TextureLoader().load('./pics/sa_logo.png');
+  logoTexture.minFilter = THREE.LinearFilter;
+  logoTexture.magFilter = THREE.LinearFilter;
+  const logoMaterial = new THREE.MeshBasicMaterial({ 
+    map: logoTexture, 
+    transparent: true, 
+    depthWrite: false, 
+    depthTest: false 
+  });
+  const logoGeometry = new THREE.PlaneGeometry(0.45, 0.18);
+  const logoMesh = new THREE.Mesh(logoGeometry, logoMaterial);
+  logoMesh.position.set(-0.25, rowY_logo, 0.007);
+  logoMesh.renderOrder = 101;
+  group.add(logoMesh);
+  
+  // Spielname "Punch-Ball"
+  const gameNamePlane = makeCanvasPlane(0.9, 0.20);
+  gameNamePlane.userData.kind = 'gamename';
+  drawGameName(gameNamePlane, 'Punch-Ball');
+  gameNamePlane.position.set(0.30, rowY_logo, 0.007);
+  group.add(gameNamePlane);
+  
+  // Titel "Spieleinstellungen"
   const title = makeCanvasPlane(1.48, 0.16);
   title.userData.kind = 'title';
   drawTitle(title, 'Spieleinstellungen');
@@ -148,18 +344,18 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const restartBtn = makeButton('Neu starten',0.70, 0.14); restartBtn.userData.kind = 'restart';
   const quitBtn    = makeButton('Beenden',    1.48, 0.14); quitBtn.userData.kind = 'quit';
 
-  // Layout (alle bei z ~ 0.007)
-  const rowY_diff   = 0.42;
-  const rowY_speed  = 0.18;
-  const rowY_dda    = -0.06;
-  const rowY_time   = -0.30;
-  const rowY_diffLbl  = rowY_diff  + 0.12;
-  const rowY_speedLbl = rowY_speed + 0.12;
-  const rowY_ddaLbl   = rowY_dda   + 0.12;
-  const rowY_timeLbl  = rowY_time  + 0.12;
-  const rowY_ctrl1  = -0.60; // resume/restart
-  const rowY_ctrl2  = -0.80; // start
-  const rowY_ctrl3  = -1.00; // quit
+  // Layout mit mehr Abstand zwischen Reihen
+  const rowY_diff   = 0.55;
+  const rowY_speed  = 0.25;
+  const rowY_dda    = -0.05;
+  const rowY_time   = -0.35;
+  const rowY_diffLbl  = rowY_diff  + 0.18;
+  const rowY_speedLbl = rowY_speed + 0.18;
+  const rowY_ddaLbl   = rowY_dda   + 0.18;
+  const rowY_timeLbl  = rowY_time  + 0.18;
+  const rowY_ctrl1  = -0.65; // resume/restart
+  const rowY_ctrl2  = -0.85; // start
+  const rowY_ctrl3  = -1.05; // quit
   const positionsX  = [-0.50, 0, 0.50];
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
@@ -251,6 +447,12 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   }
 
   function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime, ddaIndex: selDda }; }
+  
+  function updateAnimation(currentTime) {
+    if (panel.userData.material && panel.userData.material.uniforms) {
+      panel.userData.material.uniforms.uTime.value = currentTime * 0.001;
+    }
+  }
 
-  return { group, panel, hitPlane, setVisible, placeAt, setMode, setHover, pickButtonAtWorldPoint, click, getSelection };
+  return { group, panel, hitPlane, setVisible, placeAt, setMode, setHover, pickButtonAtWorldPoint, click, getSelection, updateAnimation };
 }
