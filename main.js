@@ -35,7 +35,13 @@ renderer.xr.setReferenceSpaceType('local-floor');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(ARButton.createButton(renderer, { optionalFeatures: ['local-floor','hand-tracking'] }));
+document.body.appendChild(
+  ARButton.createButton(renderer, {
+    requiredFeatures: ['dom-overlay','local-floor'],
+    optionalFeatures: ['hand-tracking'],
+    domOverlay: { root: document.body }
+  })
+);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 const hitParticles = new HitParticles();
 scene.add(hitParticles.points);
