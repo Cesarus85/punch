@@ -491,7 +491,7 @@ function onHazardHit(h){
   updateHUD();
 }
 
-// Hazard wird von Faust getroffen: kein Bildschirm-Flash, aber Haptik
+// Hazard wird von Faust getroffen: Bildschirm-Flash + Haptik
 function onHazardFistHit(h){
   h.alive=false;
   dissolveHazard(h.index, elapsed);
@@ -500,6 +500,8 @@ function onHazardFistHit(h){
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
+  if (domOverlayActive) hazardFlash.start();
+  else hazardFlashFallback();
   updateHUD();
 }
 
@@ -511,7 +513,7 @@ function fistsHit(p,fists){
     if (_v5.length() <= (BALL_RADIUS+FIST_RADIUS)) return true;
   } return false;
 }
-// Hazard wird von Faust berührt → Penalty ohne Screen-Flash
+// Hazard wird von Faust berührt → Penalty mit Screen-Flash
 function fistsHitHazard(p,fists){
   for(const f of fists){
     _v5.subVectors(p, f.pos);
