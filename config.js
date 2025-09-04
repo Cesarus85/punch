@@ -7,7 +7,6 @@ export const SIDE_OFFSET_TIGHT = 0.25;  // m links/rechts (eng)
 export const TIGHT_PROB = 0.45;         // Wahrscheinlichkeit für "eng"
 export const BALL_SPEED = 1.6;          // m/s
 export const SPAWN_INTERVAL = 0.65;     // s
-export const PUNCH_SPEED = 0.6;         // m/s Mindestgeschwindigkeit der Faust
 export const SPAWN_MAX_BELOW = 0.70;    // m (max. 70 cm unter Headset)
 export const MISS_PLANE_OFFSET = 0.02;  // m vor der initialen Ebene
 export const SPAWN_BIAS = 0.20;         // m (20 cm näher zu dir, reduziert Wand-Occlusion)
