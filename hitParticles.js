@@ -1,4 +1,4 @@
-import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
+import * as THREE from './three.js';
 import { HIT_PARTICLE_COUNT } from './config.js';
 
 export class HitParticles {
