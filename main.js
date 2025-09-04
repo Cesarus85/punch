@@ -473,7 +473,7 @@ function onBallMiss(b){
 function onHazardHit(h){
   h.alive=false;
   dissolveHazard(h.index, elapsed);
-  hitParticles.burst(h.position.clone());
+  // hitParticles.burst(h.position.clone());
   setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
@@ -488,7 +488,7 @@ function onHazardHit(h){
 function onHazardFistHit(h){
   h.alive=false;
   dissolveHazard(h.index, elapsed);
-  hitParticles.burst(h.position.clone());
+  // hitParticles.burst(h.position.clone());
   setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
