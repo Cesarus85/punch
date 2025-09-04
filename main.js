@@ -461,6 +461,7 @@ function onBallMiss(b){
   flashMiss();
   updateHUD();
 }
+// Hazard trifft den Körper: Bildschirm-Flash + Haptik
 function onHazardHit(h){
   h.alive=false;
   dissolveHazard(h.index, elapsed);
@@ -474,13 +475,27 @@ function onHazardHit(h){
   updateHUD();
 }
 
+// Hazard wird von Faust getroffen: kein Bildschirm-Flash, aber Haptik
+function onHazardFistHit(h){
+  h.alive=false;
+  dissolveHazard(h.index, elapsed);
+  hitParticles.burst(h.position.clone());
+  setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
+  hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
+  if (AUDIO_ENABLED) penaltySound();
+  rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
+  updateHUD();
+}
+
 /* ======================= Collision Helpers ======================= */
+// Ball trifft Faust → normaler Treffer
 function fistsHit(p,fists){
   for(const f of fists){
     _v5.subVectors(p, f.pos);
     if (_v5.length() <= (BALL_RADIUS+FIST_RADIUS)) return true;
   } return false;
 }
+// Hazard wird von Faust berührt → Penalty ohne Screen-Flash
 function fistsHitHazard(p,fists){
   for(const f of fists){
     _v5.subVectors(p, f.pos);
@@ -764,7 +779,7 @@ function loop(){
   }
   getBallMesh().instanceMatrix.needsUpdate = true;
 
-  // Hazards – Update (inkl. Körpertreffer)
+  // Hazards – Update (Körper = Flash, Faust = nur Haptik)
   for (let i=hazards.length-1;i>=0;i--){
     const h=hazards[i]; if(!h.alive){ hazards.splice(i,1); continue; }
     h.basePos.addScaledVector(h.velocity, dt);
@@ -773,7 +788,8 @@ function loop(){
     getHazardMesh().setMatrixAt(h.index,_m1);
 
     const p = h.position;
-    if (fistsHitHazard(p,fists) || hazardHitsBody(p)){ onHazardHit(h); hazards.splice(i,1); continue; }
+    if (hazardHitsBody(p)){ onHazardHit(h); hazards.splice(i,1); continue; }
+    if (fistsHitHazard(p,fists)){ onHazardFistHit(h); hazards.splice(i,1); continue; }
 
     const dot = _v2.subVectors(h.position, iPos).dot(iForward);
     if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); continue; }
