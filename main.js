@@ -32,13 +32,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
+let domOverlayActive = false;
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
 document.body.appendChild(renderer.domElement);
 document.body.appendChild(
   ARButton.createButton(renderer, {
-    requiredFeatures: ['dom-overlay','local-floor'],
-    optionalFeatures: ['hand-tracking'],
+    // All desired features are optional to allow graceful fallback
+    optionalFeatures: ['dom-overlay','local-floor','hand-tracking'],
     domOverlay: { root: document.body }
   })
 );
@@ -52,6 +54,13 @@ renderer.xr.addEventListener('sessionstart', ()=>{
   renderer.setPixelRatio(1.2);
   if (renderer.xr.setFoveation) renderer.xr.setFoveation(1.0);
   if (renderer.xr.setFramebufferScaleFactor) renderer.xr.setFramebufferScaleFactor(0.85);
+
+  // Detect DOM overlay support; disable flash effects if unavailable
+  const session = renderer.xr.getSession();
+  domOverlayActive = !!session?.domOverlayState;
+  if (!domOverlayActive) {
+    console.warn('dom-overlay not available, using reduced visual effects');
+  }
 });
 
 /* =================== Initial Pose (feste Blickrichtung) =================== */
@@ -452,13 +461,13 @@ function onBallHit(b){
   hits++; streak++; score+=comboMultiplier();
   const now=performance.now(); if (AUDIO_ENABLED && now-_lastHitAt>40){ hitSound(); _lastHitAt=now; }
   rumble(0.9,60);
-  flashHit();
+  if (domOverlayActive) flashHit();
   updateHUD();
 }
 function onBallMiss(b){
   b.alive=false; freeBall(b.index);
   misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40);
-  flashMiss();
+  if (domOverlayActive) flashMiss();
   updateHUD();
 }
 // Hazard trifft den Körper: Bildschirm-Flash + Haptik
@@ -471,7 +480,7 @@ function onHazardHit(h){
   if (AUDIO_ENABLED) penaltySound();
   // Emphasize hazard impact with short, high-intensity rumble
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
-  hazardFlash.start();
+  if (domOverlayActive) hazardFlash.start();
   updateHUD();
 }
 
