@@ -8,17 +8,19 @@ import {
   AUDIO_ENABLED, HAPTICS_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
   DEBUG_HAZARD_RING_MS,
-  MIN_SPAWN_DISTANCE
+  MIN_SPAWN_DISTANCE,
+  DISSOLVE_DURATION
 } from './config.js';
 
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
-import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall } from './ball.js';
+import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
 import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
 import { flashHit, flashMiss } from './effects.js';
+import { HitParticles } from './hitParticles.js';
 
 /* ============================ Renderer ============================ */
 const renderer = new THREE.WebGLRenderer({
@@ -34,6 +36,8 @@ const camera = new THREE.PerspectiveCamera();
 document.body.appendChild(renderer.domElement);
 document.body.appendChild(ARButton.createButton(renderer, { optionalFeatures: ['local-floor','hand-tracking'] }));
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+const hitParticles = new HitParticles();
+scene.add(hitParticles.points);
 window.addEventListener('resize', ()=>renderer.setSize(window.innerWidth, window.innerHeight));
 
 renderer.xr.addEventListener('sessionstart', ()=>{
@@ -434,7 +438,10 @@ function hazardHitsBody(point){
 
 let _lastHitAt = 0;
 function onBallHit(b){
-  b.alive=false; freeBall(b.index);
+  b.alive=false;
+  dissolveBall(b.index, elapsed);
+  hitParticles.burst(b.position.clone());
+  setTimeout(()=>freeBall(b.index), DISSOLVE_DURATION*1000);
   hits++; streak++; score+=comboMultiplier();
   const now=performance.now(); if (AUDIO_ENABLED && now-_lastHitAt>40){ hitSound(); _lastHitAt=now; }
   rumble(0.9,60);
@@ -580,6 +587,7 @@ function loop(){
   if (shader) shader.uniforms.uTime.value = elapsed;
   const hShader = getHazardMesh()?.material?.userData?.shader;
   if (hShader) hShader.uniforms.uTime.value = elapsed;
+  hitParticles.update(dt);
 
   // A/X Face-Buttons
   const session = renderer.xr.getSession?.();

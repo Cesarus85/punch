@@ -33,6 +33,10 @@ export const DRIFT_MAX_FREQ = 1.6;       // Hz
 export const AUDIO_ENABLED = true;
 export const HAPTICS_ENABLED = true;
 
+// --- Effects ---
+export const DISSOLVE_DURATION = 0.4;  // s
+export const HIT_PARTICLE_COUNT = 40;
+
 // --- Hazards (Step 4) ---
 export const HAZARD_ENABLED = true;
 export const HAZARD_PROB = 0.25;              // gern wieder auf 0.25 setzen
