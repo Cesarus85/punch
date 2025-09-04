@@ -20,7 +20,7 @@ import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHaz
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
-import { flashHit, flashMiss, hazardFlash, initHazardFlashFallback, hazardFlashFallback } from './effects.js';
+import { flashHit, flashMiss, createHazardPlane, flashHazardPlane } from './effects.js';
 import { HitParticles } from './hitParticles.js';
 
 /* ============================ Renderer ============================ */
@@ -31,8 +31,6 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
-
-let domOverlayActive = false;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
@@ -47,6 +45,7 @@ document.body.appendChild(
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 const hitParticles = new HitParticles();
 scene.add(hitParticles.points);
+createHazardPlane(camera);
 window.addEventListener('resize', () => {
   if (!renderer.xr.isPresenting) {
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -59,14 +58,6 @@ renderer.xr.addEventListener('sessionstart', ()=>{
   if (renderer.xr.setFoveation) renderer.xr.setFoveation(1.0);
   if (renderer.xr.isPresenting && renderer.xr.setFramebufferScaleFactor)
     renderer.xr.setFramebufferScaleFactor(0.85);
-
-  // Detect DOM overlay support; disable flash effects if unavailable
-  const session = renderer.xr.getSession();
-  domOverlayActive = !!session?.domOverlayState;
-  if (!domOverlayActive) {
-    console.warn('dom-overlay not available, using reduced visual effects');
-    initHazardFlashFallback(camera);
-  }
 });
 
 /* =================== Initial Pose (feste Blickrichtung) =================== */
@@ -467,13 +458,13 @@ function onBallHit(b){
   hits++; streak++; score+=comboMultiplier();
   const now=performance.now(); if (AUDIO_ENABLED && now-_lastHitAt>40){ hitSound(); _lastHitAt=now; }
   rumble(0.9,60);
-  if (domOverlayActive) flashHit();
+  flashHit();
   updateHUD();
 }
 function onBallMiss(b){
   b.alive=false; freeBall(b.index);
   misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40);
-  if (domOverlayActive) flashMiss();
+  flashMiss();
   updateHUD();
 }
 // Hazard trifft den Körper: Bildschirm-Flash + Haptik
@@ -486,8 +477,7 @@ function onHazardHit(h){
   if (AUDIO_ENABLED) penaltySound();
   // Emphasize hazard impact with short, high-intensity rumble
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
-  if (domOverlayActive) hazardFlash.start();
-  else hazardFlashFallback();
+  flashHazardPlane();
   updateHUD();
 }
 
@@ -500,8 +490,7 @@ function onHazardFistHit(h){
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
-  if (domOverlayActive) hazardFlash.start();
-  else hazardFlashFallback();
+  flashHazardPlane();
   updateHUD();
 }
 

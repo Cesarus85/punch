@@ -60,21 +60,18 @@ function startHazardFlash(){
 
 export const hazardFlash = { start: startHazardFlash };
 
-// Fallback effect for environments without DOM overlay
+// Plane-based hazard flash effect
 let hazardPlane;
-export function initHazardFlashFallback(camera){
-  if (hazardPlane) return;
-  const geo = new THREE.PlaneGeometry(2, 2);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.35, depthWrite: false });
-  hazardPlane = new THREE.Mesh(geo, mat);
-  hazardPlane.visible = false;
-  hazardPlane.renderOrder = 10000;
-  hazardPlane.position.set(0, 0, -0.5);
-  camera.add(hazardPlane);
+export function createHazardPlane(camera){
+  const geometry = new THREE.PlaneGeometry(2, 2);
+  const material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0 });
+  hazardPlane = new THREE.Mesh(geometry, material);
+  hazardPlane.position.set(0, 0, -0.01);
+  camera.add(hazardPlane); // 0.01 vor der Kamera positionieren
 }
 
-export function hazardFlashFallback(){
+export function flashHazardPlane(){
   if (!hazardPlane) return;
-  hazardPlane.visible = true;
-  setTimeout(()=>{ hazardPlane.visible = false; }, 300);
+  hazardPlane.material.opacity = 0.4;
+  setTimeout(() => hazardPlane.material.opacity = 0, 300);
 }
