@@ -13,6 +13,7 @@ export class HitParticles {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
     this.geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities,3));
     this.geometry.setAttribute('life', new THREE.BufferAttribute(life,1));
+    this.geometry.computeBoundingSphere();
     this.material = new THREE.PointsMaterial({ color:0xffffff, size:0.02, transparent:true, depthWrite:false });
     this.points = new THREE.Points(this.geometry, this.material);
     this.positions = positions;
@@ -34,6 +35,7 @@ export class HitParticles {
     }
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.life.needsUpdate = true;
+    this.geometry.computeBoundingSphere();
   }
   burst(pos){
     for(let i=0;i<this.count;i++){
@@ -52,5 +54,6 @@ export class HitParticles {
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.velocity.needsUpdate = true;
     this.geometry.attributes.life.needsUpdate = true;
+    this.geometry.computeBoundingSphere();
   }
 }
