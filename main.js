@@ -125,6 +125,7 @@ function rumble(intensity=0.8, durationMs=60){
 const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi'];
 const SPEED_LABELS = ['Langsam','Mittel','Schnell'];
 const TIME_LABELS  = ['Endlos','1:00','3:00','5:00'];
+const DDA_LABELS  = ['Aus','50%','100%'];
 
 const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25 };
 const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
@@ -136,7 +137,7 @@ const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,de
 // Vertikale S-Kurve: sanfter Downtrend
 const VDRIFT_BIAS_MIN = 0.05, VDRIFT_BIAS_MAX = 0.15;
 
-const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS);
+const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS, DDA_LABELS);
 menu.group.visible = false; scene.add(menu.group);
 
 /* ====================== Countdown (throttled) ====================== */
@@ -165,7 +166,15 @@ function placeCountdown(){
 }
 function beginCountdown(){
   const sel = menu.getSelection();
-  applyGamePreset(DIFF_LABELS[sel.difficultyIndex], SPEED_LABELS[sel.speedIndex], TIME_LABELS[sel.timeIndex]);
+  applyGamePreset(
+    DIFF_LABELS[sel.difficultyIndex],
+    SPEED_LABELS[sel.speedIndex],
+    TIME_LABELS[sel.timeIndex]
+  );
+  const strengthMap = [0, 0.5, 1];
+  DDA_CFG.strength = strengthMap[sel.ddaIndex] ?? 1;
+  const note = `${DIFF_LABELS[sel.difficultyIndex]} · ${SPEED_LABELS[sel.speedIndex]} · ${TIME_LABELS[sel.timeIndex]} · ${DDA_LABELS[sel.ddaIndex]}`;
+  hud.set({ note });
   hardResetRound(); menu.setVisible(false); setLasersVisible(false); hideBackToMenuButton();
   game.menuActive=false; ensureCountdownPlane(); placeCountdown();
   countdown.active=true; countdown.time=3.999; countdown.lastDrawn=-1; drawCountdown(3);
@@ -191,7 +200,8 @@ let baseStraightShare = 1.0;
 let baseHazardProb = HAZARD_PROB;
 
 const DDA_CFG = {
-  enabled: true,
+  strength: 1.0,
+  get enabled(){ return this.strength > 0; },
   interval: 12.0,      // alle 12 s anpassen
   spawnMinMul: 0.60,   // schneller: bis 60% des Basis-Intervalls
   spawnMaxMul: 1.30,   // langsamer: bis 130% des Basis-Intervalls
@@ -631,16 +641,41 @@ function loop(){
 
       if (total >= DDA_CFG.minEvents){
         const acc = dHits / Math.max(1, total);
+        const s = DDA_CFG.strength;
         if (acc >= DDA_CFG.goodAcc && dHaz <= 1){
           // Spieler performt sehr gut → anziehen
-          tuning.spawnInterval = clamp(tuning.spawnInterval * 0.92, baseSpawnInterval*DDA_CFG.spawnMinMul, baseSpawnInterval*DDA_CFG.spawnMaxMul);
-          tuning.straightShare = clamp(tuning.straightShare * 0.92, DDA_CFG.straightMin, DDA_CFG.straightMax);
-          tuning.hazardProb    = clamp(tuning.hazardProb + 0.02, DDA_CFG.hazMin, DDA_CFG.hazMax);
+          tuning.spawnInterval = clamp(
+            tuning.spawnInterval * (1 + (0.92 - 1) * s),
+            baseSpawnInterval*DDA_CFG.spawnMinMul,
+            baseSpawnInterval*DDA_CFG.spawnMaxMul
+          );
+          tuning.straightShare = clamp(
+            tuning.straightShare * (1 + (0.92 - 1) * s),
+            DDA_CFG.straightMin,
+            DDA_CFG.straightMax
+          );
+          tuning.hazardProb    = clamp(
+            tuning.hazardProb + 0.02 * s,
+            DDA_CFG.hazMin,
+            DDA_CFG.hazMax
+          );
         } else if (acc <= DDA_CFG.badAcc || dHaz >= 2){
           // eher schwierig → abmildern
-          tuning.spawnInterval = clamp(tuning.spawnInterval * 1.08, baseSpawnInterval*DDA_CFG.spawnMinMul, baseSpawnInterval*DDA_CFG.spawnMaxMul);
-          tuning.straightShare = clamp(tuning.straightShare * 1.06, DDA_CFG.straightMin, DDA_CFG.straightMax);
-          tuning.hazardProb    = clamp(tuning.hazardProb - 0.02, DDA_CFG.hazMin, DDA_CFG.hazMax);
+          tuning.spawnInterval = clamp(
+            tuning.spawnInterval * (1 + (1.08 - 1) * s),
+            baseSpawnInterval*DDA_CFG.spawnMinMul,
+            baseSpawnInterval*DDA_CFG.spawnMaxMul
+          );
+          tuning.straightShare = clamp(
+            tuning.straightShare * (1 + (1.06 - 1) * s),
+            DDA_CFG.straightMin,
+            DDA_CFG.straightMax
+          );
+          tuning.hazardProb    = clamp(
+            tuning.hazardProb - 0.02 * s,
+            DDA_CFG.hazMin,
+            DDA_CFG.hazMax
+          );
         }
       }
       lastDdaHits = hits; lastDdaMisses = misses; lastDdaHazHits = hazardHits; ddaTimer = 0;

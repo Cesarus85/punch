@@ -70,16 +70,16 @@ function makePanelBG(w=1.60, h=1.50) { // größer, damit alle Buttons sicher dr
   return m;
 }
 
-export function createMenu(diffLabels, speedLabels, timeLabels) {
+export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
-  const panel = makePanelBG(1.60, 1.50);
+  const panel = makePanelBG(1.60, 1.80);
   group.add(panel);
 
   // Unsichtbare Hit-Plane knapp vor den Buttons für Ray-Treffer/Laser
   const hitPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.60, 1.50, 1, 1),
+    new THREE.PlaneGeometry(1.60, 1.80, 1, 1),
     new THREE.MeshBasicMaterial({ transparent:true, opacity:0.0, depthWrite:false })
   );
   hitPlane.position.z = 0.006;
@@ -109,6 +109,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels) {
     b.userData.kind = 'time'; b.userData.index = i;
     return b;
   });
+  const ddaButtons = ddaLabels.map((lbl, i) => {
+    const b = makeButton(lbl, 0.42, 0.14);
+    b.userData.kind = 'dda'; b.userData.index = i;
+    return b;
+  });
 
   const startBtn   = makeButton('Starten',    1.48, 0.16); startBtn.userData.kind = 'start';
   const resumeBtn  = makeButton('Fortsetzen', 0.70, 0.14); resumeBtn.userData.kind = 'resume';
@@ -118,14 +123,16 @@ export function createMenu(diffLabels, speedLabels, timeLabels) {
   // Layout (alle bei z ~ 0.007)
   const rowY_diff   = 0.34;
   const rowY_speed  = 0.14;
-  const rowY_time   = -0.06;
-  const rowY_ctrl1  = -0.30; // resume/restart
-  const rowY_ctrl2  = -0.48; // start
-  const rowY_ctrl3  = -0.66; // quit
+  const rowY_dda    = -0.06;
+  const rowY_time   = -0.26;
+  const rowY_ctrl1  = -0.50; // resume/restart
+  const rowY_ctrl2  = -0.68; // start
+  const rowY_ctrl3  = -0.86; // quit
   const positionsX  = [-0.50, 0, 0.50];
 
   diffButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_diff,  0.007); group.add(b); });
   speedButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_speed, 0.007); group.add(b); });
+  ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda,   0.007); group.add(b); });
   timeButtons.forEach((b,i)=>{  b.position.set(positionsX[i], rowY_time,  0.007); group.add(b); });
 
   resumeBtn.position.set(-0.35, rowY_ctrl1, 0.007);
@@ -135,11 +142,12 @@ export function createMenu(diffLabels, speedLabels, timeLabels) {
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
   // Auswahlzustand
-  let selDiff = 0, selSpeed = 1, selTime = 0; // Endlos default
+  let selDiff = 0, selSpeed = 1, selTime = 0, selDda = 2; // Endlos default, DDA 100%
   const setSelected = (arr, idx) => arr.forEach((b,i)=>{ b.userData.selected=(i===idx); drawButton(b); });
   setSelected(diffButtons, selDiff);
   setSelected(speedButtons, selSpeed);
   setSelected(timeButtons, selTime);
+  setSelected(ddaButtons, selDda);
 
   // Modus: 'prestart' | 'ingame'
   let mode = 'prestart';
@@ -180,7 +188,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels) {
     group.worldToLocal(local);
     const x=local.x, y=local.y;
     const candidates = [
-      ...diffButtons, ...speedButtons, ...timeButtons,
+      ...diffButtons, ...speedButtons, ...ddaButtons, ...timeButtons,
       startBtn, resumeBtn, restartBtn, quitBtn
     ].filter(o => o.visible && !o.userData.disabled);
     for (const b of candidates){
@@ -196,6 +204,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels) {
     const { kind, index } = btn.userData;
     if (kind==='difficulty'){ selDiff=index; setSelected(diffButtons, selDiff); return { action:'set-difficulty', value: selDiff }; }
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); return { action:'set-speed', value: selSpeed }; }
+    if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); return { action:'set-time', value: selTime }; }
     if (kind==='start')   return { action:'start' };
     if (kind==='resume')  return { action:'resume' };
@@ -204,7 +213,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels) {
     return null;
   }
 
-  function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime }; }
+  function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime, ddaIndex: selDda }; }
 
   return { group, panel, hitPlane, setVisible, placeAt, setMode, setHover, pickButtonAtWorldPoint, click, getSelection };
 }
