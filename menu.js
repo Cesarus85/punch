@@ -30,6 +30,27 @@ function drawTitle(mesh, text) {
   ctx.fillText(text, (W - tw)/2, H*0.70);
   tex.needsUpdate = true;
 }
+function drawLabel(mesh, text) {
+  const ctx = mesh.userData._ctx, tex = mesh.userData._tex;
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#ffffff';
+  let size = 80;
+  while (size >= 40) {
+    ctx.font = `bold ${size}px system-ui, Arial`;
+    const tw = ctx.measureText(text).width;
+    if (tw <= W - 80) break;
+    size -= 4;
+  }
+  const tw = ctx.measureText(text).width;
+  ctx.fillText(text, (W - tw)/2, H*0.70);
+  tex.needsUpdate = true;
+}
+function makeLabel(w=1.48, h=0.10) {
+  const mesh = makeCanvasPlane(w, h);
+  mesh.userData.kind = 'label';
+  return mesh;
+}
 function makeButton(label, w=0.42, h=0.14) {
   const mesh = makeCanvasPlane(w, h);
   mesh.userData.label = label;
@@ -93,6 +114,12 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   title.position.set(0, 0.56, 0.007);
   group.add(title);
 
+  // Labels
+  const diffLabelMesh  = makeLabel(); drawLabel(diffLabelMesh,  'Schwierigkeit');
+  const speedLabelMesh = makeLabel(); drawLabel(speedLabelMesh, 'Geschwindigkeit');
+  const ddaLabelMesh   = makeLabel(); drawLabel(ddaLabelMesh,   'Variable Schwierigkeitsanpassung');
+  const timeLabelMesh  = makeLabel(); drawLabel(timeLabelMesh,  'Zeiteinstellungen');
+
   // Buttons
   const diffButtons = diffLabels.map((lbl, i) => {
     const b = makeButton(lbl, 0.42, 0.14);
@@ -125,10 +152,19 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const rowY_speed  = 0.14;
   const rowY_dda    = -0.06;
   const rowY_time   = -0.26;
+  const rowY_diffLbl  = rowY_diff  + 0.12;
+  const rowY_speedLbl = rowY_speed + 0.12;
+  const rowY_ddaLbl   = rowY_dda   + 0.12;
+  const rowY_timeLbl  = rowY_time  + 0.12;
   const rowY_ctrl1  = -0.50; // resume/restart
   const rowY_ctrl2  = -0.68; // start
   const rowY_ctrl3  = -0.86; // quit
   const positionsX  = [-0.50, 0, 0.50];
+
+  diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
+  speedLabelMesh.position.set(0, rowY_speedLbl, 0.007); group.add(speedLabelMesh);
+  ddaLabelMesh.position.set(0, rowY_ddaLbl, 0.007);    group.add(ddaLabelMesh);
+  timeLabelMesh.position.set(0, rowY_timeLbl, 0.007);  group.add(timeLabelMesh);
 
   diffButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_diff,  0.007); group.add(b); });
   speedButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_speed, 0.007); group.add(b); });
@@ -190,7 +226,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     const candidates = [
       ...diffButtons, ...speedButtons, ...ddaButtons, ...timeButtons,
       startBtn, resumeBtn, restartBtn, quitBtn
-    ].filter(o => o.visible && !o.userData.disabled);
+    ].filter(o => o.visible && !o.userData.disabled && o.userData.kind!=='label');
     for (const b of candidates){
       const w=b.geometry.parameters.width, h=b.geometry.parameters.height;
       const bx=b.position.x, by=b.position.y;
