@@ -480,7 +480,7 @@ const raycaster = new THREE.Raycaster();
 const controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
 const lasers = [];
 function makeLaser(){
-  const baseLen=2.0, geo=new THREE.CylinderGeometry(0.005,0.005,baseLen,12);
+  const baseLen=3.0, geo=new THREE.CylinderGeometry(0.005,0.005,baseLen,12);
   const mat=new THREE.MeshBasicMaterial({ color:0x00e5ff, transparent:true, opacity:0.95, depthTest:false });
   const m=new THREE.Mesh(geo,mat); m.rotation.x=Math.PI/2; m.position.z=-(baseLen/2);
   m.userData.baseLen=baseLen; m.visible=false; return m;

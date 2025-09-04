@@ -83,7 +83,7 @@ function drawButton(btn) {
   ctx.fillText(label, (W - tw)/2, H*0.66);
   tex.needsUpdate = true;
 }
-function makePanelBG(w=1.60, h=1.50) { // größer, damit alle Buttons sicher drin sind
+function makePanelBG(w=1.80, h=2.20) { // größer, damit alle Buttons sicher drin sind
   const mat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.64, depthWrite:false });
   const geo = new THREE.PlaneGeometry(w, h, 1, 1);
   const m = new THREE.Mesh(geo, mat);
@@ -95,12 +95,12 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
-  const panel = makePanelBG(1.60, 1.80);
+  const panel = makePanelBG(1.80, 2.20);
   group.add(panel);
 
   // Unsichtbare Hit-Plane knapp vor den Buttons für Ray-Treffer/Laser
   const hitPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.60, 1.80, 1, 1),
+    new THREE.PlaneGeometry(1.80, 2.20, 1, 1),
     new THREE.MeshBasicMaterial({ transparent:true, opacity:0.0, depthWrite:false })
   );
   hitPlane.position.z = 0.006;
@@ -148,17 +148,17 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const quitBtn    = makeButton('Beenden',    1.48, 0.14); quitBtn.userData.kind = 'quit';
 
   // Layout (alle bei z ~ 0.007)
-  const rowY_diff   = 0.34;
-  const rowY_speed  = 0.14;
+  const rowY_diff   = 0.42;
+  const rowY_speed  = 0.18;
   const rowY_dda    = -0.06;
-  const rowY_time   = -0.26;
+  const rowY_time   = -0.30;
   const rowY_diffLbl  = rowY_diff  + 0.12;
   const rowY_speedLbl = rowY_speed + 0.12;
   const rowY_ddaLbl   = rowY_dda   + 0.12;
   const rowY_timeLbl  = rowY_time  + 0.12;
-  const rowY_ctrl1  = -0.50; // resume/restart
-  const rowY_ctrl2  = -0.68; // start
-  const rowY_ctrl3  = -0.86; // quit
+  const rowY_ctrl1  = -0.60; // resume/restart
+  const rowY_ctrl2  = -0.80; // start
+  const rowY_ctrl3  = -1.00; // quit
   const positionsX  = [-0.50, 0, 0.50];
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
@@ -214,7 +214,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   function setVisible(v){ group.visible=v; if(!v) clearHover(); }
   function placeAt(pos, forward){
     const target = new THREE.Vector3().copy(pos).add(forward);
-    group.position.copy(pos).addScaledVector(forward, 1.25);
+    group.position.copy(pos).addScaledVector(forward, 1.5);
     group.lookAt(target);
   }
 
