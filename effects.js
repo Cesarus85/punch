@@ -26,3 +26,31 @@ export function flashHit(){
 export function flashMiss(){
   flash('rgba(255,255,100,0.35)');
 }
+
+// Hazard flash overlay with red edges and quick fade-out
+let hazardOverlay;
+function ensureHazardOverlay(){
+  if (!hazardOverlay){
+    hazardOverlay = document.createElement('div');
+    hazardOverlay.style.position = 'fixed';
+    hazardOverlay.style.top = '0';
+    hazardOverlay.style.left = '0';
+    hazardOverlay.style.width = '100%';
+    hazardOverlay.style.height = '100%';
+    hazardOverlay.style.pointerEvents = 'none';
+    hazardOverlay.style.opacity = '0';
+    hazardOverlay.style.transition = 'opacity 100ms';
+    hazardOverlay.style.boxShadow = '0 0 0 20px rgba(255,0,0,0.9) inset';
+    hazardOverlay.style.background = 'transparent';
+    hazardOverlay.style.zIndex = '10000';
+    document.body.appendChild(hazardOverlay);
+  }
+}
+
+function startHazardFlash(){
+  ensureHazardOverlay();
+  hazardOverlay.style.opacity = '1';
+  requestAnimationFrame(()=>{ hazardOverlay.style.opacity = '0'; });
+}
+
+export const hazardFlash = { start: startHazardFlash };
