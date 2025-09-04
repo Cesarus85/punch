@@ -19,7 +19,7 @@ import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard } from './ha
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
-import { flashHit, flashMiss } from './effects.js';
+import { flashHit, flashMiss, hazardFlash } from './effects.js';
 import { HitParticles } from './hitParticles.js';
 
 /* ============================ Renderer ============================ */
@@ -457,7 +457,10 @@ function onBallMiss(b){
 function onHazardHit(h){
   h.alive=false; freeHazard(h.index);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
-  if (AUDIO_ENABLED) penaltySound(); rumble(1.0,80); updateHUD();
+  if (AUDIO_ENABLED) penaltySound();
+  rumble(1.0,80);
+  hazardFlash.start();
+  updateHUD();
 }
 
 /* ======================= Collision Helpers ======================= */
