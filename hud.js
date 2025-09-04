@@ -1,4 +1,4 @@
-import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
+import * as THREE from './three.js';
 import { HUD_PLANE_W, HUD_PLANE_H, HUD_FORWARD, HUD_RIGHT, HUD_TILT_DEG } from './config.js';
 
 export function createHUD(scene){

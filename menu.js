@@ -1,5 +1,5 @@
 // Robustes Menü mit Hit-Plane, 2D-Picking und Zeitmodi
-import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
+import * as THREE from './three.js';
 
 function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');

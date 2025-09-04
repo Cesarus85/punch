@@ -1,4 +1,4 @@
-import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
+import * as THREE from './three.js';
 import { HAZARD_RADIUS, HAZARD_COLOR, HAZARD_EMISSIVE_INTENSITY, DRIFT_ENABLED, DISSOLVE_DURATION } from './config.js';
 
 export const MAX_HAZARDS = 32;
