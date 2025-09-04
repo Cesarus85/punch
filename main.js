@@ -20,7 +20,7 @@ import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHaz
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
-import { flashHit, flashMiss, createHazardPlane, flashHazardPlane } from './effects.js';
+import { flashHit, flashMiss, hazardFlash } from './effects.js';
 import { HitParticles } from './hitParticles.js';
 
 /* ============================ Renderer ============================ */
@@ -45,7 +45,6 @@ document.body.appendChild(
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 const hitParticles = new HitParticles();
 scene.add(hitParticles.points);
-createHazardPlane(camera);
 window.addEventListener('resize', () => {
   if (!renderer.xr.isPresenting) {
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -477,7 +476,7 @@ function onHazardHit(h){
   if (AUDIO_ENABLED) penaltySound();
   // Emphasize hazard impact with short, high-intensity rumble
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
-  flashHazardPlane();
+  hazardFlash.start();
   updateHUD();
 }
 
@@ -490,7 +489,7 @@ function onHazardFistHit(h){
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
   if (AUDIO_ENABLED) penaltySound();
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
-  flashHazardPlane();
+  hazardFlash.start();
   updateHUD();
 }
 
