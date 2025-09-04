@@ -18,6 +18,7 @@ import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard } from './ha
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
+import { flashHit, flashMiss } from './effects.js';
 
 /* ============================ Renderer ============================ */
 const renderer = new THREE.WebGLRenderer({
@@ -436,11 +437,15 @@ function onBallHit(b){
   b.alive=false; freeBall(b.index);
   hits++; streak++; score+=comboMultiplier();
   const now=performance.now(); if (AUDIO_ENABLED && now-_lastHitAt>40){ hitSound(); _lastHitAt=now; }
-  rumble(0.9,60); updateHUD();
+  rumble(0.9,60);
+  flashHit();
+  updateHUD();
 }
 function onBallMiss(b){
   b.alive=false; freeBall(b.index);
-  misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40); updateHUD();
+  misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40);
+  flashMiss();
+  updateHUD();
 }
 function onHazardHit(h){
   h.alive=false; freeHazard(h.index);
