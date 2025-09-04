@@ -51,8 +51,11 @@ function ensureHazardOverlay(){
 
 function startHazardFlash(){
   ensureHazardOverlay();
+  hazardOverlay.style.transition = 'none';
   hazardOverlay.style.opacity = '1';
-  requestAnimationFrame(()=>{ hazardOverlay.style.opacity = '0'; });
+  void hazardOverlay.offsetWidth;
+  hazardOverlay.style.transition = 'opacity 300ms';
+  hazardOverlay.style.opacity = '0';
 }
 
 export const hazardFlash = { start: startHazardFlash };
