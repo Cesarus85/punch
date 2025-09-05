@@ -497,8 +497,8 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const rowY_speedLbl = rowY_speed + 0.18;
   const rowY_ddaLbl   = rowY_dda   + 0.18;
   const rowY_timeLbl  = rowY_time  + 0.18;
-  const rowY_ctrl1  = -0.75; // resume/restart
-  const rowY_ctrl2  = -0.95; // start
+  const rowY_ctrl1  = -0.75; // restart
+  const rowY_ctrl2  = -0.95; // start/resume
   const rowY_ctrl3  = -1.15; // quit
   const positionsX  = [-0.60, 0, 0.60];
 
@@ -518,19 +518,31 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   genderFemaleBtn.position.set(positionsX[2], rowY_body, 0.007);
   group.add(heightField, genderMaleBtn, genderFemaleBtn);
 
-  resumeBtn.position.set(-0.35, rowY_ctrl1, 0.007);
-  restartBtn.position.set(+0.35, rowY_ctrl1, 0.007);
+  resumeBtn.position.set(0, rowY_ctrl2, 0.007);
+  restartBtn.position.set(0, rowY_ctrl1, 0.007);
   startBtn.position.set(0, rowY_ctrl2, 0.007);
   quitBtn.position.set(0, rowY_ctrl3, 0.007);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
   // Auswahlzustand
-  let selDiff = 0, selSpeed = 1, selTime = 0, selDda = 2; // Endlos default, DDA 100%
+  const ls = (typeof window !== 'undefined') ? window.localStorage : null;
+  const loadIdx = (key, max, def) => {
+    const v = parseInt(ls?.getItem(key), 10);
+    return Number.isInteger(v) && v >= 0 && v < max ? v : def;
+  };
+
+  let selDiff = loadIdx('selDiff', diffLabels.length, 0);
+  let selSpeed = loadIdx('selSpeed', speedLabels.length, 1);
+  let selTime  = loadIdx('selTime',  timeLabels.length, 0);
+  let selDda = 2; // Endlos default, DDA 100%
   const setSelected = (arr, idx) => arr.forEach((b,i)=>{ b.userData.selected=(i===idx); drawButton(b); });
   setSelected(diffButtons, selDiff);
   setSelected(speedButtons, selSpeed);
   setSelected(timeButtons, selTime);
   setSelected(ddaButtons, selDda);
+  ls?.setItem('selDiff', selDiff.toString());
+  ls?.setItem('selSpeed', selSpeed.toString());
+  ls?.setItem('selTime', selTime.toString());
   if (selGender >= 0) setSelected(genderButtons, selGender);
 
   // Modus: 'prestart' | 'ingame'
@@ -551,16 +563,24 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   updateStartDisabled();
 
   // Hover zentral
-  let hoveredBtn = null;
+  let hoveredBtn = null, hoverTimer = null;
   function drawElement(o){
     if (o.userData.kind==='height') drawInputField(o);
     else drawButton(o);
   }
-  function clearHover(){ if (hoveredBtn){ hoveredBtn.userData.hover=false; drawElement(hoveredBtn); hoveredBtn=null; } }
+  function clearHover(){
+    if (hoverTimer){ clearTimeout(hoverTimer); hoverTimer = null; }
+    if (hoveredBtn){ hoveredBtn.userData.hover=false; drawElement(hoveredBtn); hoveredBtn=null; }
+  }
   function setHover(btn){
     if (hoveredBtn === btn) return;
+    if (!btn){
+      if (hoveredBtn && !hoverTimer){ hoverTimer = setTimeout(clearHover, 200); }
+      return;
+    }
+    if (hoverTimer){ clearTimeout(hoverTimer); hoverTimer=null; }
     if (hoveredBtn){ hoveredBtn.userData.hover=false; drawElement(hoveredBtn); }
-    hoveredBtn = (btn && btn.visible && !btn.userData.disabled && btn.userData.kind!=='title') ? btn : null;
+    hoveredBtn = (btn.visible && !btn.userData.disabled && btn.userData.kind!=='title') ? btn : null;
     if (hoveredBtn){ hoveredBtn.userData.hover=true; drawElement(hoveredBtn); }
   }
 
@@ -595,10 +615,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   function click(btn){
     if (!btn || !btn.visible || btn.userData.disabled) return null;
     const { kind, index } = btn.userData;
-    if (kind==='difficulty'){ selDiff=index; setSelected(diffButtons, selDiff); return { action:'set-difficulty', value: selDiff }; }
-    if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); return { action:'set-speed', value: selSpeed }; }
+    if (kind==='difficulty'){ selDiff=index; setSelected(diffButtons, selDiff); ls?.setItem('selDiff', selDiff.toString()); return { action:'set-difficulty', value: selDiff }; }
+    if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); ls?.setItem('selSpeed', selSpeed.toString()); return { action:'set-speed', value: selSpeed }; }
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
-    if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); return { action:'set-time', value: selTime }; }
+    if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); ls?.setItem('selTime', selTime.toString()); return { action:'set-time', value: selTime }; }
     if (kind==='height'){ setActiveInput(heightField); return null; }
     if (kind==='gender'){
       shoulderVal = (btn.userData.gender==='male') ? 0.47 : 0.36;
