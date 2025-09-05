@@ -21,13 +21,14 @@ function makeMaterial(m){
     shader.vertexShader = `attribute vec4 instData;\nattribute float dissolve;\nuniform float uTime;\nvarying float vDissolve;\n` + shader.vertexShader;
     let driftChunk = '';
     if (DRIFT_ENABLED){
-      driftChunk = `float drift = abs(instData.y) * sin(instData.z * uTime + instData.w);\n`+
-                   `if(instData.y >= 0.0){\n  transformed.x += drift;\n}else{\n  transformed.y += drift;\n}\n`;
+      driftChunk = `float drift = abs(instData.z) * sin(instData.w * uTime);\n`+
+                   `if(instData.z >= 0.0){\n  transformed.x += drift;\n}else{\n  transformed.y += drift;\n}\n`;
     }
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
       `\nvec3 transformed = vec3(position);\n` + driftChunk +
-      `float angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\ntransformed.xz = rot * transformed.xz;\nvDissolve = dissolve;\n`
+      `float angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\n`+
+      `if(instData.y > 0.5){\n  transformed.xz = rot * transformed.xz;\n}else{\n  transformed.yz = rot * transformed.yz;\n}\nvDissolve = dissolve;\n`
     );
     shader.fragmentShader = `uniform float uTime;\nuniform float uDissolveDuration;\nvarying float vDissolve;\n` + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
