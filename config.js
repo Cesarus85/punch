@@ -21,6 +21,7 @@ export const HUD_PLANE_H = 0.25;        // Unterkante auf Boden (Center = H/2)
 
 // --- Assets ---
 export const BALL_URL = './assets/ball.glb';
+export const HAZARD_URL = './assets/hantel.glb';
 
 // --- Drift (Step 3) ---
 export const DRIFT_ENABLED = true;

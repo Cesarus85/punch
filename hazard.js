@@ -1,16 +1,15 @@
 import * as THREE from './three.js';
-import { HAZARD_RADIUS, HAZARD_COLOR, HAZARD_EMISSIVE_INTENSITY, DRIFT_ENABLED, DISSOLVE_DURATION } from './config.js';
+import { GLTFLoader } from 'https://unpkg.com/three@0.166.1/examples/jsm/loaders/GLTFLoader.js?module';
+import { HAZARD_RADIUS, HAZARD_COLOR, HAZARD_EMISSIVE_INTENSITY, DRIFT_ENABLED, DISSOLVE_DURATION, HAZARD_URL } from './config.js';
 
 export const MAX_HAZARDS = 32;
 
-function makeMaterial(){
-  const m = new THREE.MeshStandardMaterial({
-    color: HAZARD_COLOR,
-    metalness: 0.1,
-    roughness: 0.6,
-    emissive: new THREE.Color(HAZARD_COLOR),
-    emissiveIntensity: HAZARD_EMISSIVE_INTENSITY
-  });
+function makeMaterial(m){
+  m.color = new THREE.Color(HAZARD_COLOR);
+  m.metalness = 0.1;
+  m.roughness = 0.6;
+  m.emissive = new THREE.Color(HAZARD_COLOR);
+  m.emissiveIntensity = HAZARD_EMISSIVE_INTENSITY;
   m.transparent = false;
   m.opacity = 1.0;
   m.depthWrite = true;
@@ -40,27 +39,61 @@ function makeMaterial(){
   return m;
 }
 
-const geo = new THREE.IcosahedronGeometry(HAZARD_RADIUS, 1);
-const mesh = new THREE.InstancedMesh(geo, makeMaterial(), MAX_HAZARDS);
-mesh.frustumCulled = false;
-mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-const arr = new Float32Array(MAX_HAZARDS*4);
-const instAttr = new THREE.InstancedBufferAttribute(arr, 4);
-mesh.geometry.setAttribute('instData', instAttr);
-const dissArr = new Float32Array(MAX_HAZARDS).fill(-1);
-const dissolveAttr = new THREE.InstancedBufferAttribute(dissArr, 1);
-mesh.geometry.setAttribute('dissolve', dissolveAttr);
-
+const loader = new GLTFLoader();
+let ready = false;
+let mesh = null;
+let instAttr = null;
+let dissolveAttr = null;
 const freeIdx = [];
 const _m = new THREE.Matrix4();
-for(let i=0;i<MAX_HAZARDS;i++){
-  freeIdx.push(i);
-  _m.makeTranslation(0,-999,0);
-  mesh.setMatrixAt(i,_m);
-}
-mesh.instanceMatrix.needsUpdate = true;
 
+export function loadHazard(){
+  return new Promise((resolve, reject) => {
+    if (ready){ resolve(); return; }
+    loader.load(
+      HAZARD_URL,
+      (gltf) => {
+        let srcMesh = null;
+        gltf.scene.traverse((n)=>{ if(n.isMesh && !srcMesh) srcMesh = n; });
+        if(!srcMesh){ reject(new Error('no mesh in hazard gltf')); return; }
+
+        const geom = srcMesh.geometry.clone();
+        const mat  = makeMaterial(srcMesh.material.clone());
+
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const maxDim = Math.max(size.x,size.y,size.z) || 1;
+        const scale = (2*HAZARD_RADIUS)/maxDim;
+        geom.applyMatrix4(new THREE.Matrix4().makeScale(scale,scale,scale));
+
+        mesh = new THREE.InstancedMesh(geom, mat, MAX_HAZARDS);
+        mesh.frustumCulled = false;
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        const arr = new Float32Array(MAX_HAZARDS*4);
+        instAttr = new THREE.InstancedBufferAttribute(arr, 4);
+        mesh.geometry.setAttribute('instData', instAttr);
+        const dissArr = new Float32Array(MAX_HAZARDS).fill(-1);
+        dissolveAttr = new THREE.InstancedBufferAttribute(dissArr, 1);
+        mesh.geometry.setAttribute('dissolve', dissolveAttr);
+
+        for(let i=0;i<MAX_HAZARDS;i++){
+          freeIdx.push(i);
+          _m.makeTranslation(0,-999,0);
+          mesh.setMatrixAt(i,_m);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+
+        ready = true;
+        resolve();
+      },
+      undefined,
+      (err) => reject(err)
+    );
+  });
+}
+
+export function isHazardReady(){ return ready; }
 export function getHazardMesh(){ return mesh; }
 export function getHazardAttribute(){ return instAttr; }
 export function getDissolveAttribute(){ return dissolveAttr; }
