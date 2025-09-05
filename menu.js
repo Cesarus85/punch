@@ -455,7 +455,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
 
   hidden.addEventListener('blur', () => {
     if (!activeInput) return;
-    const val = parseFloat(hidden.value);
+    const val = parseFloat(hidden.value.replace(',', '.'));
     if (!isNaN(val)){
       if (activeInput === heightField){
         heightVal = val;
