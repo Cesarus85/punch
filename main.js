@@ -406,8 +406,8 @@ function spawnHazard(sideSign){
     if (idx===undefined) continue;
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
     const spin = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.4,1.5,Math.random());
-    const orientation = Math.random() < 0.5 ? 0 : 1;
-    const orientationFlag = orientation;
+    const orientationFlag = Math.random() < 0.5 ? 0 : 1; // 0 horizontal, 1 vertical
+    const orientation = orientationFlag;
     let driftAmp = 0, driftOmega = 0, driftPhase = 0;
     if (DRIFT_ENABLED){
       // Platzhalter für zukünftige Hazard-Drifts
