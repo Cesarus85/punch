@@ -1,15 +1,15 @@
 import * as THREE from './three.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.166.1/examples/jsm/loaders/GLTFLoader.js?module';
-import { HAZARD_RADIUS, HAZARD_COLOR, HAZARD_EMISSIVE_INTENSITY, DRIFT_ENABLED, DISSOLVE_DURATION, HAZARD_URL } from './config.js';
+import { HAZARD_RADIUS, DRIFT_ENABLED, DISSOLVE_DURATION, HAZARD_URL } from './config.js';
 
 export const MAX_HAZARDS = 32;
 
 function makeMaterial(m){
-  m.color = new THREE.Color(HAZARD_COLOR);
+  // m.color = new THREE.Color(HAZARD_COLOR);
   m.metalness = 0.1;
   m.roughness = 0.6;
-  m.emissive = new THREE.Color(HAZARD_COLOR);
-  m.emissiveIntensity = HAZARD_EMISSIVE_INTENSITY;
+  // m.emissive = new THREE.Color(HAZARD_COLOR);
+  // m.emissiveIntensity = HAZARD_EMISSIVE_INTENSITY;
   m.transparent = false;
   m.opacity = 1.0;
   m.depthWrite = true;
