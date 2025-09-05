@@ -341,9 +341,72 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   });
 
   const startBtn   = makeButton('Starten',    1.48, 0.16); startBtn.userData.kind = 'start';
+  startBtn.userData.disabled = true; // initially disabled
   const resumeBtn  = makeButton('Fortsetzen', 0.70, 0.14); resumeBtn.userData.kind = 'resume';
   const restartBtn = makeButton('Neu starten',0.70, 0.14); restartBtn.userData.kind = 'restart';
   const quitBtn    = makeButton('Beenden',    1.48, 0.14); quitBtn.userData.kind = 'quit';
+
+  // DOM-Overlay für Körperkonfiguration
+  const inputWrap = document.createElement('div');
+  inputWrap.style.position = 'absolute';
+  inputWrap.style.bottom = '20px';
+  inputWrap.style.left = '50%';
+  inputWrap.style.transform = 'translateX(-50%)';
+  inputWrap.style.display = 'flex';
+  inputWrap.style.gap = '8px';
+  inputWrap.style.color = '#fff';
+  inputWrap.style.fontFamily = 'Segoe UI, system-ui, Arial';
+  inputWrap.style.zIndex = '1000';
+
+  const heightLabel = document.createElement('label');
+  heightLabel.textContent = 'Größe:';
+  const heightInput = document.createElement('input');
+  heightInput.type = 'number';
+  heightInput.min = '0';
+  heightInput.step = '0.01';
+  heightInput.placeholder = BODY_CAPSULE_HEIGHT.toString();
+  heightInput.style.width = '70px';
+  heightLabel.appendChild(heightInput);
+
+  const shoulderLabel = document.createElement('label');
+  shoulderLabel.textContent = 'Schulter:';
+  const shoulderInput = document.createElement('input');
+  shoulderInput.type = 'number';
+  shoulderInput.min = '0';
+  shoulderInput.step = '0.01';
+  shoulderInput.placeholder = (BODY_CAPSULE_RADIUS*2).toString();
+  shoulderInput.style.width = '70px';
+  shoulderLabel.appendChild(shoulderInput);
+
+  // Vorbelegung aus SessionStorage
+  const storedHeight = sessionStorage.getItem('height');
+  if (storedHeight) heightInput.value = storedHeight;
+  const storedShoulder = sessionStorage.getItem('shoulderWidth');
+  if (storedShoulder) shoulderInput.value = storedShoulder;
+
+  inputWrap.appendChild(heightLabel);
+  inputWrap.appendChild(shoulderLabel);
+  document.body.appendChild(inputWrap);
+
+  let startDisabled = true;
+  function updateStartDisabled(){
+    startBtn.userData.disabled = startDisabled || mode !== 'prestart';
+    drawButton(startBtn);
+  }
+
+  function validateInputs(){
+    const h = parseFloat(heightInput.value);
+    const s = parseFloat(shoulderInput.value);
+    const ok = !isNaN(h) && !isNaN(s);
+    startDisabled = !ok;
+    if (ok){
+      sessionStorage.setItem('height', h.toString());
+      sessionStorage.setItem('shoulderWidth', s.toString());
+    }
+    updateStartDisabled();
+  }
+  heightInput.addEventListener('input', validateInputs);
+  shoulderInput.addEventListener('input', validateInputs);
 
   // Layout mit mehr Abstand zwischen Reihen
   const rowY_diff   = 0.55;
@@ -392,12 +455,13 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     resumeBtn.visible  = !pre;
     restartBtn.visible = !pre;
     quitBtn.visible    = true;
-    startBtn.userData.disabled   = !pre;  drawButton(startBtn);
+    updateStartDisabled();
     resumeBtn.userData.disabled  = pre;   drawButton(resumeBtn);
     restartBtn.userData.disabled = pre;   drawButton(restartBtn);
     quitBtn.userData.disabled    = false; drawButton(quitBtn);
   }
   setMode('prestart');
+  validateInputs();
 
   // Hover zentral
   let hoveredBtn = null;
@@ -409,7 +473,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     if (hoveredBtn){ hoveredBtn.userData.hover=true; drawButton(hoveredBtn); }
   }
 
-  function setVisible(v){ group.visible=v; if(!v) clearHover(); }
+  function setVisible(v){
+    group.visible=v;
+    inputWrap.style.display = v ? 'flex' : 'none';
+    if(!v) clearHover();
+  }
   function placeAt(pos, forward){
     const target = new THREE.Vector3().copy(pos).add(forward);
     group.position.copy(pos).addScaledVector(forward, 1.5);
@@ -441,20 +509,9 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); return { action:'set-time', value: selTime }; }
     if (kind==='start'){
-      try {
-        const hStr = window.prompt('Bitte Körpergröße in Metern eingeben:', BODY_CAPSULE_HEIGHT.toString());
-        const sStr = window.prompt('Bitte Schulterbreite in Metern eingeben:', (BODY_CAPSULE_RADIUS*2).toString());
-        const height = parseFloat(hStr);
-        const shoulder = parseFloat(sStr);
-        if (!isNaN(height) || !isNaN(shoulder)) {
-          setBodyConfig({
-            height: isNaN(height) ? undefined : height,
-            shoulderWidth: isNaN(shoulder) ? undefined : shoulder
-          });
-        }
-      } catch (e) {
-        // prompt not available; ignore and keep defaults
-      }
+      const height = parseFloat(heightInput.value);
+      const shoulder = parseFloat(shoulderInput.value);
+      setBodyConfig({ height, shoulderWidth: shoulder });
       return { action:'start' };
     }
     if (kind==='resume')  return { action:'resume' };
