@@ -1,6 +1,6 @@
 // Robustes Menü mit Hit-Plane, 2D-Picking und Zeitmodi
 import * as THREE from './three.js';
-import { BODY_CAPSULE_HEIGHT, BODY_CAPSULE_RADIUS, setBodyConfig } from './config.js';
+import { setBodyConfig } from './config.js';
 
 function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');
@@ -212,6 +212,53 @@ function drawButton(btn) {
   ctx.shadowColor = 'transparent';
   tex.needsUpdate = true;
 }
+
+function makeInputField(label, w=0.60, h=0.14) {
+  const mesh = makeCanvasPlane(w, h);
+  mesh.userData.kind = null;
+  mesh.userData.label = label;
+  mesh.userData.text = '';
+  mesh.userData.hover = false;
+  mesh.userData.focus = false;
+  mesh.userData.disabled = false;
+  drawInputField(mesh);
+  return mesh;
+}
+
+function drawInputField(field) {
+  const { _ctx:ctx, _tex:tex, label, text, hover, focus } = field.userData;
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const labelFont = `600 84px 'Segoe UI', system-ui, Arial`;
+  ctx.font = labelFont;
+  ctx.fillStyle = '#fff';
+  const labelWidth = ctx.measureText(label).width;
+  const padding = 20;
+  const boxX = labelWidth + padding*2;
+  const boxY = 16;
+  const boxW = W - boxX - padding;
+  const boxH = H - boxY*2;
+
+  // label
+  ctx.fillText(label, padding, H*0.66);
+
+  // box background
+  ctx.fillStyle = 'rgba(50, 60, 75, 0.9)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+
+  // border
+  ctx.strokeStyle = focus ? '#00e5ff' : (hover ? '#ffffff' : '#888');
+  ctx.lineWidth = (focus || hover) ? 6 : 4;
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+  // text
+  ctx.fillStyle = '#fff';
+  ctx.font = `600 80px 'Segoe UI', system-ui, Arial`;
+  ctx.fillText(text, boxX + 10, H*0.66);
+
+  tex.needsUpdate = true;
+}
 function makePanelBG(w=1.80, h=2.70) {
   // Erstelle Shader-Material für glasartigen Hintergrund
   const mat = new THREE.ShaderMaterial({
@@ -351,17 +398,17 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   if (isNaN(heightVal)) heightVal = NaN;
   if (isNaN(shoulderVal)) shoulderVal = NaN;
 
-  // Buttons zur Eingabe von Größe und Schulterbreite
-  const heightBtn = makeButton('', 0.60, 0.14); heightBtn.userData.kind = 'height';
-  const shoulderBtn = makeButton('', 0.60, 0.14); shoulderBtn.userData.kind = 'shoulder';
+  // Eingabefelder für Größe und Schulterbreite
+  const heightField = makeInputField('Größe', 0.60, 0.14); heightField.userData.kind = 'height';
+  const shoulderField = makeInputField('Schulter', 0.60, 0.14); shoulderField.userData.kind = 'shoulder';
 
-  function updateHeightBtn(){
-    heightBtn.userData.label = isNaN(heightVal) ? 'Größe' : `Größe: ${heightVal.toFixed(2)}`;
-    drawButton(heightBtn);
+  function updateHeightField(){
+    heightField.userData.text = isNaN(heightVal) ? '' : heightVal.toFixed(2);
+    drawInputField(heightField);
   }
-  function updateShoulderBtn(){
-    shoulderBtn.userData.label = isNaN(shoulderVal) ? 'Schulter' : `Schulter: ${shoulderVal.toFixed(2)}`;
-    drawButton(shoulderBtn);
+  function updateShoulderField(){
+    shoulderField.userData.text = isNaN(shoulderVal) ? '' : shoulderVal.toFixed(2);
+    drawInputField(shoulderField);
   }
 
   let startDisabled = true;
@@ -371,8 +418,45 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     drawButton(startBtn);
   }
 
-  updateHeightBtn();
-  updateShoulderBtn();
+  updateHeightField();
+  updateShoulderField();
+
+  let activeInput = null;
+  function setActiveInput(field){
+    if (activeInput === field) return;
+    if (activeInput){ activeInput.userData.focus = false; drawInputField(activeInput); }
+    activeInput = field;
+    if (activeInput){ activeInput.userData.focus = true; drawInputField(activeInput); }
+  }
+
+  function handleKeydown(e){
+    if (!activeInput) return;
+    if (e.key === 'Enter'){
+      const val = parseFloat(activeInput.userData.text);
+      if (!isNaN(val)){
+        if (activeInput === heightField){
+          heightVal = val;
+          sessionStorage.setItem('height', val.toString());
+          updateHeightField();
+        } else if (activeInput === shoulderField){
+          shoulderVal = val;
+          sessionStorage.setItem('shoulderWidth', val.toString());
+          updateShoulderField();
+        }
+        updateStartDisabled();
+      }
+      setActiveInput(null);
+    } else if (e.key === 'Backspace'){
+      activeInput.userData.text = activeInput.userData.text.slice(0,-1);
+      drawInputField(activeInput);
+    } else if (/^[0-9.]$/.test(e.key)){
+      if (e.key === '.' && activeInput.userData.text.includes('.')) return;
+      activeInput.userData.text += e.key;
+      drawInputField(activeInput);
+    }
+  }
+
+  window.addEventListener('keydown', handleKeydown);
 
   // Layout mit mehr Abstand zwischen Reihen
   const rowY_diff   = 0.55;
@@ -399,10 +483,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda,   0.007); group.add(b); });
   timeButtons.forEach((b,i)=>{  b.position.set(positionsX[i], rowY_time,  0.007); group.add(b); });
 
-  // Größe/Schulter Buttons
-  heightBtn.position.set(-0.35, rowY_body, 0.007);
-  shoulderBtn.position.set(0.35, rowY_body, 0.007);
-  group.add(heightBtn, shoulderBtn);
+  // Größe/Schulter Eingabefelder
+  heightField.position.set(-0.35, rowY_body, 0.007);
+  shoulderField.position.set(0.35, rowY_body, 0.007);
+  group.add(heightField, shoulderField);
 
   resumeBtn.position.set(-0.35, rowY_ctrl1, 0.007);
   restartBtn.position.set(+0.35, rowY_ctrl1, 0.007);
@@ -437,12 +521,16 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
 
   // Hover zentral
   let hoveredBtn = null;
-  function clearHover(){ if (hoveredBtn){ hoveredBtn.userData.hover=false; drawButton(hoveredBtn); hoveredBtn=null; } }
+  function drawElement(o){
+    if (o.userData.kind==='height' || o.userData.kind==='shoulder') drawInputField(o);
+    else drawButton(o);
+  }
+  function clearHover(){ if (hoveredBtn){ hoveredBtn.userData.hover=false; drawElement(hoveredBtn); hoveredBtn=null; } }
   function setHover(btn){
     if (hoveredBtn === btn) return;
-    if (hoveredBtn){ hoveredBtn.userData.hover=false; drawButton(hoveredBtn); }
+    if (hoveredBtn){ hoveredBtn.userData.hover=false; drawElement(hoveredBtn); }
     hoveredBtn = (btn && btn.visible && !btn.userData.disabled && btn.userData.kind!=='title') ? btn : null;
-    if (hoveredBtn){ hoveredBtn.userData.hover=true; drawButton(hoveredBtn); }
+    if (hoveredBtn){ hoveredBtn.userData.hover=true; drawElement(hoveredBtn); }
   }
 
   function setVisible(v){
@@ -462,7 +550,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     const x=local.x, y=local.y;
     const candidates = [
       ...diffButtons, ...speedButtons, ...ddaButtons, ...timeButtons,
-      heightBtn, shoulderBtn,
+      heightField, shoulderField,
       startBtn, resumeBtn, restartBtn, quitBtn
     ].filter(o => o.visible && !o.userData.disabled && o.userData.kind!=='label');
     for (const b of candidates){
@@ -480,28 +568,8 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); return { action:'set-speed', value: selSpeed }; }
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); return { action:'set-time', value: selTime }; }
-    if (kind==='height'){
-      const def = isNaN(heightVal) ? BODY_CAPSULE_HEIGHT : heightVal;
-      const v = parseFloat(prompt('Körpergröße in Metern', def.toString()));
-      if (!isNaN(v)) {
-        heightVal = v;
-        sessionStorage.setItem('height', v.toString());
-        updateHeightBtn();
-        updateStartDisabled();
-      }
-      return null;
-    }
-    if (kind==='shoulder'){
-      const def = isNaN(shoulderVal) ? (BODY_CAPSULE_RADIUS*2) : shoulderVal;
-      const v = parseFloat(prompt('Schulterbreite in Metern', def.toString()));
-      if (!isNaN(v)) {
-        shoulderVal = v;
-        sessionStorage.setItem('shoulderWidth', v.toString());
-        updateShoulderBtn();
-        updateStartDisabled();
-      }
-      return null;
-    }
+    if (kind==='height'){ setActiveInput(heightField); return null; }
+    if (kind==='shoulder'){ setActiveInput(shoulderField); return null; }
     if (kind==='start'){
       const height = heightVal;
       const shoulder = shoulderVal;
