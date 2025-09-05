@@ -198,6 +198,7 @@ function placeCountdown(){
 }
 function beginCountdown(){
   const sel = menu.getSelection();
+  game.songUrl = sel.songUrl || null;
   applyGamePreset(
     DIFF_LABELS[sel.difficultyIndex],
     SPEED_LABELS[sel.speedIndex],
@@ -214,7 +215,7 @@ function beginCountdown(){
 }
 
 /* =================== Game-State / Tuning + DDA =================== */
-const game = { menuActive:true, running:false };
+const game = { menuActive:true, running:false, songUrl:null };
 
 const tuning = {
   spawnInterval: SPAWN_INTERVAL,
@@ -742,7 +743,7 @@ function loop(){
     drawCountdown(n); placeCountdown();
     if (countdown.time<=0){
       countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true;
-      if (MUSIC_ENABLED && MUSIC_URL){ playMusic(MUSIC_URL); }
+      if (MUSIC_ENABLED && (game.songUrl || MUSIC_URL)){ playMusic(game.songUrl || MUSIC_URL); }
       else { setBpm(DEFAULT_BPM); resetBeats(); }
       updateHUD('');
     }
