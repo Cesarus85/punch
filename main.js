@@ -219,6 +219,8 @@ let baseSpawnInterval = SPAWN_INTERVAL;
 let baseStraightShare = 1.0;
 let baseHazardProb = HAZARD_PROB;
 
+const MISS_EXTRA_TRAVEL = 1.0;
+
 const DDA_CFG = {
   strength: 1.0,
   get enabled(){ return this.strength > 0; },
@@ -366,7 +368,7 @@ function spawnBall(sideSign,{style='auto'}={}){
     }
 
     balls.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot,
-                 t:0, driftAmp, driftOmega, driftPhase, driftAxisIdx, driftBiasRate });
+                 t:0, driftAmp, driftOmega, driftPhase, driftAxisIdx, driftBiasRate, missed:false });
 
     _m1.makeTranslation(_v1.x, _v1.y, _v1.z);
     getBallMesh().setMatrixAt(idx, _m1);
@@ -413,7 +415,7 @@ function spawnHazard(sideSign){
       // Platzhalter für zukünftige Hazard-Drifts
     }
     const prevDot = _v3.subVectors(_v1, iPos).dot(iForward);
-    hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase, orientation });
+    hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase, orientation, missed:false });
     _m1.makeTranslation(_v1.x,_v1.y,_v1.z);
     if (orientation < 0.5){
       _m2.makeRotationZ(Math.PI * 0.5);
@@ -477,7 +479,7 @@ function onBallHit(b){
   updateHUD();
 }
 function onBallMiss(b){
-  b.alive=false; freeBall(b.index);
+  b.missed = true;
   misses++; streak=0; if (AUDIO_ENABLED) missSound(); rumble(0.25,40);
   flashMiss();
   updateHUD();
@@ -810,9 +812,16 @@ function loop(){
     if (fistsHit(p,fists)){ onBallHit(b); balls.splice(i,1); continue; }
 
     const dot = _v2.subVectors(b.position, iPos).dot(iForward);
-    if (b.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ onBallMiss(b); balls.splice(i,1); continue; }
+    if (b.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ onBallMiss(b); }
+    if (b.missed && dot <= MISS_PLANE_OFFSET - MISS_EXTRA_TRAVEL){
+      b.alive = false;
+      dissolveBall(b.index, elapsed);
+      setTimeout(()=>freeBall(b.index), DISSOLVE_DURATION*1000);
+      balls.splice(i,1);
+      continue;
+    }
+    if (dot<-6.0){ b.alive=false; freeBall(b.index); balls.splice(i,1); continue; }
     b.prevDot=dot;
-    if (dot<-6.0){ b.alive=false; freeBall(b.index); balls.splice(i,1); }
   }
   getBallMesh().instanceMatrix.needsUpdate = true;
 
@@ -833,8 +842,15 @@ function loop(){
     if (fistsHitHazard(p,fists)){ onHazardFistHit(h); hazards.splice(i,1); continue; }
 
     const dot = _v2.subVectors(h.position, iPos).dot(iForward);
-    if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); continue; }
-    if (dot<-6.0){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); }
+    if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.missed = true; }
+    if (h.missed && dot <= MISS_PLANE_OFFSET - MISS_EXTRA_TRAVEL){
+      h.alive = false;
+      dissolveHazard(h.index, elapsed);
+      setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
+      hazards.splice(i,1);
+      continue;
+    }
+    if (dot<-6.0){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); continue; }
     h.prevDot = dot;
   }
   getHazardMesh().instanceMatrix.needsUpdate = true;
