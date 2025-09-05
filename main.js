@@ -10,7 +10,9 @@ import {
   HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION,
   DEBUG_HAZARD_RING_MS,
   MIN_SPAWN_DISTANCE,
-  DISSOLVE_DURATION
+  DISSOLVE_DURATION,
+  BODY_CAPSULE_HEIGHT,
+  BODY_CAPSULE_RADIUS
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -449,8 +451,7 @@ function spawnHazard(sideSign){
 }
 
 /* =================== Körperkapsel & Events =================== */
-// Capsule Head→Hip
-const BODY_CAPSULE_HEIGHT = 1.10, BODY_CAPSULE_RADIUS = 0.28;
+// Capsule Head→Hip (values configurable via config.js)
 const _bpHead = new THREE.Vector3(), _bpHip  = new THREE.Vector3();
 const _bpAB   = new THREE.Vector3(), _bpAP   = new THREE.Vector3();
 const _bpClosest = new THREE.Vector3(), _bpTmp  = new THREE.Vector3();

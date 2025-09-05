@@ -1,5 +1,6 @@
 // Robustes Menü mit Hit-Plane, 2D-Picking und Zeitmodi
 import * as THREE from './three.js';
+import { BODY_CAPSULE_HEIGHT, BODY_CAPSULE_RADIUS, setBodyConfig } from './config.js';
 
 function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');
@@ -439,7 +440,23 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); return { action:'set-speed', value: selSpeed }; }
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); return { action:'set-time', value: selTime }; }
-    if (kind==='start')   return { action:'start' };
+    if (kind==='start'){
+      try {
+        const hStr = window.prompt('Bitte Körpergröße in Metern eingeben:', BODY_CAPSULE_HEIGHT.toString());
+        const sStr = window.prompt('Bitte Schulterbreite in Metern eingeben:', (BODY_CAPSULE_RADIUS*2).toString());
+        const height = parseFloat(hStr);
+        const shoulder = parseFloat(sStr);
+        if (!isNaN(height) || !isNaN(shoulder)) {
+          setBodyConfig({
+            height: isNaN(height) ? undefined : height,
+            shoulderWidth: isNaN(shoulder) ? undefined : shoulder
+          });
+        }
+      } catch (e) {
+        // prompt not available; ignore and keep defaults
+      }
+      return { action:'start' };
+    }
     if (kind==='resume')  return { action:'resume' };
     if (kind==='restart') return { action:'restart' };
     if (kind==='quit')    return { action:'quit' };

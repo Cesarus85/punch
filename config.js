@@ -59,3 +59,20 @@ export const GAME_MODE = 'endless';           // 'endless' | 'sprint60'
 export const SPRINT_DURATION = 60;            // Sekunden
 export const COMBO_STEP = 5;                  // alle 5 Treffer +1 Multiplikator
 export const COMBO_MAX_MULT = 5;              // max. x5
+
+// --- Player Body Configuration ---
+export let BODY_HEIGHT = 1.75;                // default body height in meters
+export let SHOULDER_WIDTH = 0.56;             // default shoulder width in meters
+export let BODY_CAPSULE_HEIGHT = 1.10;        // used for hazard collision (head to hip)
+export let BODY_CAPSULE_RADIUS = 0.28;        // half of default shoulder width
+
+export function setBodyConfig({ height, shoulderWidth } = {}) {
+  if (typeof height === 'number' && height > 0) {
+    BODY_HEIGHT = height;
+    BODY_CAPSULE_HEIGHT = height;
+  }
+  if (typeof shoulderWidth === 'number' && shoulderWidth > 0) {
+    SHOULDER_WIDTH = shoulderWidth;
+    BODY_CAPSULE_RADIUS = shoulderWidth / 2;
+  }
+}
