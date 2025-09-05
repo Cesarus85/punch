@@ -65,7 +65,8 @@ export const COMBO_MAX_MULT = 5;              // max. x5
 export let BODY_HEIGHT = 1.75;                // default body height in meters
 export let SHOULDER_WIDTH = 0.56;             // default shoulder width in meters
 export let BODY_CAPSULE_HEIGHT = 1.10;        // used for hazard collision (head to hip)
-export let BODY_CAPSULE_RADIUS = 0.28;        // half of default shoulder width
+// Reduced radius to delay hazard collisions until actual body contact (~15 cm less)
+export let BODY_CAPSULE_RADIUS = 0.13;        // half of default shoulder width minus 0.15 m
 
 export function setBodyConfig({ height, shoulderWidth } = {}) {
   if (typeof height === 'number' && height > 0) {
@@ -74,7 +75,8 @@ export function setBodyConfig({ height, shoulderWidth } = {}) {
   }
   if (typeof shoulderWidth === 'number' && shoulderWidth > 0) {
     SHOULDER_WIDTH = shoulderWidth;
-    BODY_CAPSULE_RADIUS = shoulderWidth / 2;
+    // Use shoulder width with a 0.15 m inward offset, ensure radius stays positive
+    BODY_CAPSULE_RADIUS = Math.max((shoulderWidth / 2) - 0.15, 0.01);
   }
 }
 
