@@ -335,7 +335,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   // Logo und Spielname
   const rowY_logo = 1.15;
-  const rowY_title = 0.85;
+  const rowY_title = 0.95;
   
   // Logo laden und anzeigen
   const logoTexture = new THREE.TextureLoader().load('./pics/sa_logo.png');
@@ -497,17 +497,17 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const rowY_diff   = 0.55;
   const rowY_speed  = 0.25;
   const rowY_dda    = -0.05;
-  const rowY_beat   = -0.35;
-  const rowY_time   = -0.55;
-  const rowY_body   = -0.75; // Größe/Geschlecht
+  const rowY_beat   = -0.30;
+  const rowY_time   = -0.70;
+  const rowY_body   = -0.95; // Größe/Geschlecht
   const rowY_diffLbl  = rowY_diff  + 0.18;
   const rowY_speedLbl = rowY_speed + 0.18;
   const rowY_ddaLbl   = rowY_dda   + 0.18;
   const rowY_beatLbl  = rowY_beat  + 0.18;
-  const rowY_timeLbl  = rowY_time  + 0.18;
-  const rowY_ctrl1  = -0.95; // restart
-  const rowY_ctrl2  = -1.15; // start/resume
-  const rowY_ctrl3  = -1.35; // quit
+  const rowY_timeLbl  = rowY_time  + 0.15;
+  const rowY_ctrl1  = -1.15; // restart
+  const rowY_ctrl2  = -1.35; // start/resume
+  const rowY_ctrl3  = -1.55; // quit
   const positionsX  = [-0.60, 0, 0.60];
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
@@ -516,11 +516,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   beatLabelMesh.position.set(0, rowY_beatLbl, 0.007);  group.add(beatLabelMesh);
   timeLabelMesh.position.set(0, rowY_timeLbl, 0.007);  group.add(timeLabelMesh);
 
-  diffButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_diff,  0.007); group.add(b); });
+  diffButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_diff, 0.007); group.add(b); });
   speedButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_speed, 0.007); group.add(b); });
-  ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda,   0.007); group.add(b); });
-  beatButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_beat,  0.007); group.add(b); });
-  timeButtons.forEach((b,i)=>{  b.position.set(positionsX[i], rowY_time,  0.007); group.add(b); });
+  ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda, 0.007); group.add(b); });
+  beatButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_beat, 0.007); group.add(b); });
+  timeButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_time, 0.007); group.add(b); });
 
   // Größe und Geschlecht
   heightField.position.set(positionsX[0], rowY_body, 0.007);
