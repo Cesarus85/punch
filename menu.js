@@ -425,6 +425,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
         b.userData.kind = 'song';
         b.userData.index = i;
         b.userData.url = `./assets/music/${dir}/${item.file || item}`;
+        // Align each song button with the song panel's X coordinate
         b.position.set(songPanelX, startY - i*0.16, 0.007);
         group.add(b);
         songButtons.push(b);
@@ -545,7 +546,8 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const rowY_ctrl2  = -0.80; // start/resume
   const rowY_ctrl3  = -0.88; // quit
   const positionsX  = [-0.70, 0, 0.70];
-  const songPanelX = 0.90;
+  // Position the song selection panel with a small gap to the right of the main menu
+  const songPanelX = 1.55;
   songPanel.position.set(songPanelX, rowY_time + 0.10, 0.006);
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
