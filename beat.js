@@ -3,6 +3,10 @@ import { BEAT_DURATION } from './config.js';
 const listeners = { 1:new Set(), 2:new Set(), 4:new Set() };
 const timers = { 1:0, 2:0, 4:0 };
 
+export function resetBeats(){
+  for (const sub of [1,2,4]) timers[sub] = 0;
+}
+
 export function onBeat(subdivision, fn){
   if (!listeners[subdivision]) return () => {};
   listeners[subdivision].add(fn);

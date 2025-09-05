@@ -8,10 +8,17 @@ export const TIGHT_PROB = 0.45;         // Wahrscheinlichkeit für "eng"
 export const BALL_SPEED = 1.6;          // m/s
 export const SPAWN_INTERVAL = 0.65;     // s
 // --- Beat / Rhythm ---
-export const BPM = 92;
-export const BEAT_DURATION = 60 / BPM;            // Sekunden pro Beat
-export const HALF_BEAT_DURATION = BEAT_DURATION / 2;
-export const QUARTER_BEAT_DURATION = BEAT_DURATION / 4;
+export const DEFAULT_BPM = 92;
+export let BPM = DEFAULT_BPM;
+export let BEAT_DURATION = 60 / BPM;            // Sekunden pro Beat
+export let HALF_BEAT_DURATION = BEAT_DURATION / 2;
+export let QUARTER_BEAT_DURATION = BEAT_DURATION / 4;
+export function setBpm(bpm){
+  BPM = bpm;
+  BEAT_DURATION = 60 / bpm;
+  HALF_BEAT_DURATION = BEAT_DURATION / 2;
+  QUARTER_BEAT_DURATION = BEAT_DURATION / 4;
+}
 export let BEAT_SNAP_ENABLED = true;
 export function setBeatSnapEnabled(v){ BEAT_SNAP_ENABLED = !!v; }
 // Dynamische Spawn-Höhe basierend auf Körpergröße (z.B. Brusthöhe ~60 %)
@@ -41,6 +48,9 @@ export const DRIFT_MAX_FREQ = 1.6;       // Hz
 // --- Audio/Haptics ---
 export const AUDIO_ENABLED = true;
 export const HAPTICS_ENABLED = true;
+export let MUSIC_ENABLED = true;
+export const MUSIC_URL = './assets/music.mp3';
+export function setMusicEnabled(v){ MUSIC_ENABLED = !!v; }
 
 // --- Effects ---
 export const DISSOLVE_DURATION = 0.4;  // s
