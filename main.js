@@ -407,6 +407,7 @@ function spawnHazard(sideSign){
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
     const spin = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.4,1.5,Math.random());
     const orientation = Math.random() < 0.5 ? 0 : 1;
+    const orientationFlag = orientation === 0 ? 1 : 0;
     let driftAmp = 0, driftOmega = 0, driftPhase = 0;
     if (DRIFT_ENABLED){
       // Platzhalter für zukünftige Hazard-Drifts
@@ -423,7 +424,7 @@ function spawnHazard(sideSign){
     const attr = getHazardAttribute();
     const aIndex = idx*4;
     attr.array[aIndex+0] = spin;
-    attr.array[aIndex+1] = orientation;
+    attr.array[aIndex+1] = orientationFlag;
     if (DRIFT_ENABLED){
       attr.array[aIndex+2] = driftAmp;
       attr.array[aIndex+3] = driftOmega;
