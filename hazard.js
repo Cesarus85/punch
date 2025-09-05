@@ -28,7 +28,7 @@ function makeMaterial(m){
       '#include <begin_vertex>',
       `\nvec3 transformed = vec3(position);\n` + driftChunk +
       `float angle = instData.x * uTime;\nmat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\n`+
-      `if(instData.y > 0.5){\n  transformed.xz = rot * transformed.xz;\n}else{\n  transformed.yz = rot * transformed.yz;\n}\nvDissolve = dissolve;\n`
+      `transformed.yz = rot * transformed.yz;\nvDissolve = dissolve;\n`
     );
     shader.fragmentShader = `uniform float uTime;\nuniform float uDissolveDuration;\nvarying float vDissolve;\n` + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
