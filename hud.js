@@ -15,7 +15,7 @@ export function createHUD(scene){
 
   const state = {
     hits: 0, misses: 0, score: 0, streak: 0,
-    mode: 'endless', timeLeft: null, best: null,
+    mode: 'time60', timeLeft: 60, best: null,
     note: '' // kurze Hinweise wie "Zeit!"
   };
 
@@ -36,7 +36,15 @@ export function createHUD(scene){
 
     // Mode / Timer / Best
     ctx.font = 'bold 32px system-ui, Arial';
-    const modeTxt = state.mode === 'sprint60' ? 'Mode: Sprint 60s' : 'Mode: Endless';
+    let modeTxt = '';
+    switch (state.mode) {
+      case 'time180': modeTxt = 'Mode: 3:00'; break;
+      case 'time300': modeTxt = 'Mode: 5:00'; break;
+      case 'time60':
+      default:
+        modeTxt = 'Mode: 1:00';
+        break;
+    }
     ctx.fillText(modeTxt, 24, 104);
     if (state.timeLeft !== null) {
       ctx.fillStyle = state.timeLeft <= 5 ? '#ffcc00' : '#cfe8ff';

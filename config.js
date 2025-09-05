@@ -73,7 +73,7 @@ export const HAZARD_RUMBLE_DURATION = 55;     // ms, kurz und kräftig
 export const DEBUG_HAZARD_RING_MS = 0;      // 0 = aus; kurzer Ring-Flash am Hazard-Spawn
 
 // --- Game Modes ---
-export const GAME_MODE = 'endless';           // 'endless' | 'sprint60'
+export const GAME_MODE = 'time60';            // 'time60' | 'time180' | 'time300'
 export const SPRINT_DURATION = 60;            // Sekunden
 export const COMBO_STEP = 5;                  // alle 5 Treffer +1 Multiplikator
 export const COMBO_MAX_MULT = 5;              // max. x5
