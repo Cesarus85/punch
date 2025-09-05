@@ -317,7 +317,7 @@ function makePanelBG(w=1.80, h=2.70) {
   return m;
 }
 
-export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
+export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatLabels) {
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
@@ -371,6 +371,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const diffLabelMesh  = makeLabel(); drawLabel(diffLabelMesh,  'Schwierigkeit');
   const speedLabelMesh = makeLabel(); drawLabel(speedLabelMesh, 'Geschwindigkeit');
   const ddaLabelMesh   = makeLabel(); drawLabel(ddaLabelMesh,   'Variable Schwierigkeitsanpassung');
+  const beatLabelMesh  = makeLabel(); drawLabel(beatLabelMesh,  'Taktbindung');
   const timeLabelMesh  = makeLabel(); drawLabel(timeLabelMesh,  'Zeiteinstellungen');
 
   // Buttons
@@ -384,14 +385,19 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     b.userData.kind = 'speed'; b.userData.index = i;
     return b;
   });
-  const timeButtons = timeLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.42, 0.14);
-    b.userData.kind = 'time'; b.userData.index = i;
-    return b;
-  });
   const ddaButtons = ddaLabels.map((lbl, i) => {
     const b = makeButton(lbl, 0.42, 0.14);
     b.userData.kind = 'dda'; b.userData.index = i;
+    return b;
+  });
+  const beatButtons = beatLabels.map((lbl, i) => {
+    const b = makeButton(lbl, 0.42, 0.14);
+    b.userData.kind = 'beat'; b.userData.index = i;
+    return b;
+  });
+  const timeButtons = timeLabels.map((lbl, i) => {
+    const b = makeButton(lbl, 0.42, 0.14);
+    b.userData.kind = 'time'; b.userData.index = i;
     return b;
   });
 
@@ -491,25 +497,29 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const rowY_diff   = 0.55;
   const rowY_speed  = 0.25;
   const rowY_dda    = -0.05;
-  const rowY_time   = -0.35;
-  const rowY_body   = -0.55; // Größe/Geschlecht
+  const rowY_beat   = -0.35;
+  const rowY_time   = -0.55;
+  const rowY_body   = -0.75; // Größe/Geschlecht
   const rowY_diffLbl  = rowY_diff  + 0.18;
   const rowY_speedLbl = rowY_speed + 0.18;
   const rowY_ddaLbl   = rowY_dda   + 0.18;
+  const rowY_beatLbl  = rowY_beat  + 0.18;
   const rowY_timeLbl  = rowY_time  + 0.18;
-  const rowY_ctrl1  = -0.75; // restart
-  const rowY_ctrl2  = -0.95; // start/resume
-  const rowY_ctrl3  = -1.15; // quit
+  const rowY_ctrl1  = -0.95; // restart
+  const rowY_ctrl2  = -1.15; // start/resume
+  const rowY_ctrl3  = -1.35; // quit
   const positionsX  = [-0.60, 0, 0.60];
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
   speedLabelMesh.position.set(0, rowY_speedLbl, 0.007); group.add(speedLabelMesh);
   ddaLabelMesh.position.set(0, rowY_ddaLbl, 0.007);    group.add(ddaLabelMesh);
+  beatLabelMesh.position.set(0, rowY_beatLbl, 0.007);  group.add(beatLabelMesh);
   timeLabelMesh.position.set(0, rowY_timeLbl, 0.007);  group.add(timeLabelMesh);
 
   diffButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_diff,  0.007); group.add(b); });
   speedButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_speed, 0.007); group.add(b); });
   ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda,   0.007); group.add(b); });
+  beatButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_beat,  0.007); group.add(b); });
   timeButtons.forEach((b,i)=>{  b.position.set(positionsX[i], rowY_time,  0.007); group.add(b); });
 
   // Größe und Geschlecht
@@ -534,15 +544,18 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   let selDiff = loadIdx('selDiff', diffLabels.length, 0);
   let selSpeed = loadIdx('selSpeed', speedLabels.length, 1);
   let selTime  = loadIdx('selTime',  timeLabels.length, 0);
+  let selBeat  = loadIdx('selBeat',  beatLabels.length, 1);
   let selDda = 2; // Endlos default, DDA 100%
   const setSelected = (arr, idx) => arr.forEach((b,i)=>{ b.userData.selected=(i===idx); drawButton(b); });
   setSelected(diffButtons, selDiff);
   setSelected(speedButtons, selSpeed);
   setSelected(timeButtons, selTime);
   setSelected(ddaButtons, selDda);
+  setSelected(beatButtons, selBeat);
   ls?.setItem('selDiff', selDiff.toString());
   ls?.setItem('selSpeed', selSpeed.toString());
   ls?.setItem('selTime', selTime.toString());
+  ls?.setItem('selBeat', selBeat.toString());
   if (selGender >= 0) setSelected(genderButtons, selGender);
 
   // Modus: 'prestart' | 'ingame'
@@ -600,7 +613,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     group.worldToLocal(local);
     const x=local.x, y=local.y;
     const candidates = [
-      ...diffButtons, ...speedButtons, ...ddaButtons, ...timeButtons,
+      ...diffButtons, ...speedButtons, ...ddaButtons, ...beatButtons, ...timeButtons,
       heightField, ...genderButtons,
       startBtn, resumeBtn, restartBtn, quitBtn
     ].filter(o => o.visible && !o.userData.disabled && o.userData.kind!=='label');
@@ -618,6 +631,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     if (kind==='difficulty'){ selDiff=index; setSelected(diffButtons, selDiff); ls?.setItem('selDiff', selDiff.toString()); return { action:'set-difficulty', value: selDiff }; }
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); ls?.setItem('selSpeed', selSpeed.toString()); return { action:'set-speed', value: selSpeed }; }
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
+    if (kind==='beat'){ selBeat=index; setSelected(beatButtons, selBeat); ls?.setItem('selBeat', selBeat.toString()); return { action:'set-beat', value: selBeat }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); ls?.setItem('selTime', selTime.toString()); return { action:'set-time', value: selTime }; }
     if (kind==='height'){ setActiveInput(heightField); return null; }
     if (kind==='gender'){
@@ -641,7 +655,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     return null;
   }
 
-  function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime, ddaIndex: selDda }; }
+  function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime, ddaIndex: selDda, beatIndex: selBeat }; }
   
   function updateAnimation(currentTime) {
     if (panel.userData.material && panel.userData.material.uniforms) {

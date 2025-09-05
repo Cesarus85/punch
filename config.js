@@ -7,6 +7,13 @@ export const SIDE_OFFSET_TIGHT = 0.25;  // m links/rechts (eng)
 export const TIGHT_PROB = 0.45;         // Wahrscheinlichkeit für "eng"
 export const BALL_SPEED = 1.6;          // m/s
 export const SPAWN_INTERVAL = 0.65;     // s
+// --- Beat / Rhythm ---
+export const BPM = 92;
+export const BEAT_DURATION = 60 / BPM;            // Sekunden pro Beat
+export const HALF_BEAT_DURATION = BEAT_DURATION / 2;
+export const QUARTER_BEAT_DURATION = BEAT_DURATION / 4;
+export let BEAT_SNAP_ENABLED = true;
+export function setBeatSnapEnabled(v){ BEAT_SNAP_ENABLED = !!v; }
 // Dynamische Spawn-Höhe basierend auf Körpergröße (z.B. Brusthöhe ~60 %)
 export const SPAWN_HEIGHT_RATIO = 0.6;  // Anteil der Körperhöhe für Spawns
 export const MISS_PLANE_OFFSET = 0.02;  // m vor der initialen Ebene
