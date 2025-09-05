@@ -453,6 +453,23 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     drawInputField(activeInput);
   });
 
+  hidden.addEventListener('blur', () => {
+    if (!activeInput) return;
+    const val = parseFloat(hidden.value);
+    if (!isNaN(val)){
+      if (activeInput === heightField){
+        heightVal = val;
+        sessionStorage.setItem('height', val.toString());
+        updateHeightField();
+      } else if (activeInput === shoulderField){
+        shoulderVal = val;
+        sessionStorage.setItem('shoulderWidth', val.toString());
+        updateShoulderField();
+      }
+      updateStartDisabled();
+    }
+  });
+
   function handleKeydown(e){
     if (!activeInput) return;
     if (e.key === 'Enter'){
