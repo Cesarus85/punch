@@ -326,7 +326,8 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   // Unsichtbare Hit-Plane knapp vor den Buttons für Ray-Treffer/Laser
   const hitPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 2.0, 1, 1),
+    // Breitere Fläche, damit auch rechts platzierte Buttons erfasst werden
+    new THREE.PlaneGeometry(4.0, 2.0, 1, 1),
     new THREE.MeshBasicMaterial({ transparent:true, opacity:0.0, depthWrite:false })
   );
   hitPlane.position.set(0, 0, 0.006);
@@ -419,14 +420,23 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     try {
       const res = await fetch(`./assets/music/${dir}/manifest.json`);
       const list = await res.json();
-      const startY = rowY_time + 0.20;
+      const buttonHeight = 0.12;
+      const margin = 0.02;
+      const panelHeight = songPanel.geometry.parameters.height;
+      const panelTop = songPanel.position.y + panelHeight/2;
+      const panelBottom = songPanel.position.y - panelHeight/2;
+      const topY = panelTop - buttonHeight/2 - margin;
+      const bottomY = panelBottom + buttonHeight/2 + margin;
+      const step = list.length > 1 ? (topY - bottomY) / (list.length - 1) : 0;
+      const startY = list.length > 1 ? topY : (topY + bottomY) / 2;
       list.forEach((item,i) => {
-        const b = makeButton(item.name || item.file || item, 0.36, 0.12);
+        const b = makeButton(item.name || item.file || item, 0.36, buttonHeight);
         b.userData.kind = 'song';
         b.userData.index = i;
         b.userData.url = `./assets/music/${dir}/${item.file || item}`;
+        const y = startY - step*i;
         // Align each song button with the song panel's X coordinate
-        b.position.set(songPanelX, startY - i*0.16, 0.007);
+        b.position.set(songPanelX, y, 0.007);
         group.add(b);
         songButtons.push(b);
         drawButton(b);
