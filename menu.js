@@ -141,7 +141,7 @@ function makeLabel(w=1.20, h=0.10) {
   mesh.userData.kind = 'label';
   return mesh;
 }
-function makeButton(label, w=0.42, h=0.14) {
+function makeButton(label, w=0.36, h=0.12) {
   const mesh = makeCanvasPlane(w, h);
   mesh.userData.label = label;
   mesh.userData.kind = null;
@@ -205,7 +205,7 @@ function drawButton(btn) {
   
   // Text
   ctx.fillStyle = disabled ? '#999' : '#fff';
-  ctx.font = `600 96px 'Segoe UI', system-ui, Arial`;
+  ctx.font = `600 72px 'Segoe UI', system-ui, Arial`;
   const tw = ctx.measureText(label).width;
   const x = (W - tw)/2;
   const y = H*0.66;
@@ -221,7 +221,7 @@ function drawButton(btn) {
   tex.needsUpdate = true;
 }
 
-function makeInputField(label, w=0.60, h=0.14) {
+function makeInputField(label, w=0.50, h=0.12) {
   const mesh = makeCanvasPlane(w, h);
   mesh.userData.kind = null;
   mesh.userData.label = label;
@@ -238,7 +238,7 @@ function drawInputField(field) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  const labelFont = `600 84px 'Segoe UI', system-ui, Arial`;
+  const labelFont = `600 64px 'Segoe UI', system-ui, Arial`;
   ctx.font = labelFont;
   ctx.fillStyle = '#fff';
   const labelWidth = ctx.measureText(label).width;
@@ -262,12 +262,12 @@ function drawInputField(field) {
 
   // text
   ctx.fillStyle = '#fff';
-  ctx.font = `600 80px 'Segoe UI', system-ui, Arial`;
+  ctx.font = `600 60px 'Segoe UI', system-ui, Arial`;
   ctx.fillText(text, boxX + 10, H*0.66);
 
   tex.needsUpdate = true;
 }
-function makePanelBG(w=1.80, h=2.70) {
+function makePanelBG(w=2.40, h=1.80) {
   // Erstelle Shader-Material für glasartigen Hintergrund
   const mat = new THREE.ShaderMaterial({
     transparent: true,
@@ -321,21 +321,21 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const group = new THREE.Group();
   group.name = 'menuOverlay';
 
-  const panel = makePanelBG(1.80, 2.70);
+  const panel = makePanelBG(2.40, 1.80);
   group.add(panel);
 
   // Unsichtbare Hit-Plane knapp vor den Buttons für Ray-Treffer/Laser
   const hitPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 2.70, 1, 1),
+    new THREE.PlaneGeometry(2.6, 2.0, 1, 1),
     new THREE.MeshBasicMaterial({ transparent:true, opacity:0.0, depthWrite:false })
   );
-  hitPlane.position.set(0.375, 0, 0.006);
+  hitPlane.position.set(0, 0, 0.006);
   hitPlane.name = 'menuHitPlane';
   group.add(hitPlane);
 
   // Logo und Spielname
-  const rowY_logo = 1.15;
-  const rowY_title = 0.95;
+  const rowY_logo = 0.70;
+  const rowY_title = 0.52;
   
   // Logo laden und anzeigen
   const logoTexture = new THREE.TextureLoader().load('./pics/sa_logo.png');
@@ -376,33 +376,33 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   // Buttons
   const diffButtons = diffLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.42, 0.14);
+    const b = makeButton(lbl, 0.36, 0.12);
     b.userData.kind = 'difficulty'; b.userData.index = i;
     return b;
   });
   const speedButtons = speedLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.42, 0.14);
+    const b = makeButton(lbl, 0.36, 0.12);
     b.userData.kind = 'speed'; b.userData.index = i;
     return b;
   });
   const ddaButtons = ddaLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.42, 0.14);
+    const b = makeButton(lbl, 0.36, 0.12);
     b.userData.kind = 'dda'; b.userData.index = i;
     return b;
   });
   const beatButtons = beatLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.42, 0.14);
+    const b = makeButton(lbl, 0.36, 0.12);
     b.userData.kind = 'beat'; b.userData.index = i;
     return b;
   });
   const timeButtons = timeLabels.map((lbl, i) => {
-    const b = makeButton(lbl, 0.42, 0.14);
+    const b = makeButton(lbl, 0.36, 0.12);
     b.userData.kind = 'time'; b.userData.index = i;
     return b;
   });
 
   // Panel und Buttons für Musikauswahl
-  const songPanel = makePanelBG(0.80, 1.20);
+  const songPanel = makePanelBG(0.60, 1.00);
   group.add(songPanel);
   let songButtons = [];
   let selSong = -1;
@@ -419,13 +419,13 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     try {
       const res = await fetch(`./assets/music/${dir}/manifest.json`);
       const list = await res.json();
-      const startY = rowY_time + 0.30;
+      const startY = rowY_time + 0.20;
       list.forEach((item,i) => {
-        const b = makeButton(item.name || item.file || item, 0.42, 0.14);
+        const b = makeButton(item.name || item.file || item, 0.36, 0.12);
         b.userData.kind = 'song';
         b.userData.index = i;
         b.userData.url = `./assets/music/${dir}/${item.file || item}`;
-        b.position.set(songPanelX, startY - i*0.18, 0.007);
+        b.position.set(songPanelX, startY - i*0.16, 0.007);
         group.add(b);
         songButtons.push(b);
         drawButton(b);
@@ -437,11 +437,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     updateStartDisabled();
   }
 
-  const startBtn   = makeButton('Starten',    1.48, 0.16); startBtn.userData.kind = 'start';
+  const startBtn   = makeButton('Starten',    1.20, 0.14); startBtn.userData.kind = 'start';
   startBtn.userData.disabled = true; // initially disabled
-  const resumeBtn  = makeButton('Fortsetzen', 0.70, 0.14); resumeBtn.userData.kind = 'resume';
-  const restartBtn = makeButton('Neu starten',0.70, 0.14); restartBtn.userData.kind = 'restart';
-  const quitBtn    = makeButton('Beenden',    1.48, 0.14); quitBtn.userData.kind = 'quit';
+  const resumeBtn  = makeButton('Fortsetzen', 0.60, 0.12); resumeBtn.userData.kind = 'resume';
+  const restartBtn = makeButton('Neu starten',0.60, 0.12); restartBtn.userData.kind = 'restart';
+  const quitBtn    = makeButton('Beenden',    0.60, 0.12); quitBtn.userData.kind = 'quit';
   // Werte für Körperkonfiguration
   let heightVal = parseFloat(sessionStorage.getItem('height'));   // m
   let shoulderVal = parseFloat(sessionStorage.getItem('shoulderWidth')); // m
@@ -452,9 +452,9 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   if (isNaN(shoulderVal)) shoulderVal = NaN;
 
   // Eingabefeld für Größe und Geschlechter-Buttons
-  const heightField = makeInputField('Größe', 0.60, 0.14); heightField.userData.kind = 'height';
-  const genderMaleBtn = makeButton('Männlich', 0.42, 0.14); genderMaleBtn.userData.kind = 'gender'; genderMaleBtn.userData.gender = 'male';
-  const genderFemaleBtn = makeButton('Weiblich', 0.42, 0.14); genderFemaleBtn.userData.kind = 'gender'; genderFemaleBtn.userData.gender = 'female';
+  const heightField = makeInputField('Größe', 0.50, 0.12); heightField.userData.kind = 'height';
+  const genderMaleBtn = makeButton('Männlich', 0.36, 0.12); genderMaleBtn.userData.kind = 'gender'; genderMaleBtn.userData.gender = 'male';
+  const genderFemaleBtn = makeButton('Weiblich', 0.36, 0.12); genderFemaleBtn.userData.kind = 'gender'; genderFemaleBtn.userData.gender = 'female';
   const genderButtons = [genderMaleBtn, genderFemaleBtn];
   let selGender = storedGender === 'male' ? 0 : storedGender === 'female' ? 1 : -1;
 
@@ -530,23 +530,23 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   hidden.addEventListener('keydown', handleKeydown);
 
   // Layout mit mehr Abstand zwischen Reihen
-  const rowY_diff   = 0.55;
-  const rowY_speed  = 0.25;
-  const rowY_dda    = -0.05;
+  const rowY_diff   = 0.30;
+  const rowY_speed  = 0.10;
+  const rowY_dda    = -0.10;
   const rowY_beat   = -0.30;
-  const rowY_time   = -0.70;
-  const rowY_body   = -0.95; // Größe/Geschlecht
-  const rowY_diffLbl  = rowY_diff  + 0.18;
-  const rowY_speedLbl = rowY_speed + 0.18;
-  const rowY_ddaLbl   = rowY_dda   + 0.18;
-  const rowY_beatLbl  = rowY_beat  + 0.18;
-  const rowY_timeLbl  = rowY_time  + 0.15;
-  const rowY_ctrl1  = -1.15; // restart
-  const rowY_ctrl2  = -1.35; // start/resume
-  const rowY_ctrl3  = -1.55; // quit
-  const positionsX  = [-0.60, 0, 0.60];
-  const songPanelX = 1.25;
-  songPanel.position.set(songPanelX, rowY_time - 0.20, 0.006);
+  const rowY_time   = -0.50;
+  const rowY_body   = -0.65; // Größe/Geschlecht
+  const rowY_diffLbl  = rowY_diff  + 0.12;
+  const rowY_speedLbl = rowY_speed + 0.12;
+  const rowY_ddaLbl   = rowY_dda   + 0.12;
+  const rowY_beatLbl  = rowY_beat  + 0.12;
+  const rowY_timeLbl  = rowY_time  + 0.10;
+  const rowY_ctrl1  = -0.72; // restart
+  const rowY_ctrl2  = -0.80; // start/resume
+  const rowY_ctrl3  = -0.88; // quit
+  const positionsX  = [-0.70, 0, 0.70];
+  const songPanelX = 0.90;
+  songPanel.position.set(songPanelX, rowY_time + 0.10, 0.006);
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
   speedLabelMesh.position.set(0, rowY_speedLbl, 0.007); group.add(speedLabelMesh);
