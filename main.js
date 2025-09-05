@@ -5,7 +5,7 @@ import {
   BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT,
   BALL_SPEED, SPAWN_INTERVAL, MISS_PLANE_OFFSET, SPAWN_BIAS,
   DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
-  AUDIO_ENABLED, HAPTICS_ENABLED,
+  AUDIO_ENABLED, HAPTICS_ENABLED, MUSIC_ENABLED, MUSIC_URL,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
   HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION,
   DEBUG_HAZARD_RING_MS,
@@ -17,19 +17,21 @@ import {
   setFloorOffset,
   BEAT_DURATION,
   BEAT_SNAP_ENABLED,
-  setBeatSnapEnabled
+  setBeatSnapEnabled,
+  setBpm,
+  DEFAULT_BPM
 } from './config.js';
 
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
 import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, getHazardAxisAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
-import { hitSound, missSound, penaltySound } from './audio.js';
+import { hitSound, missSound, penaltySound, playMusic } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
 import { flashHit, flashMiss, hazardFlash } from './effects.js';
 import { HitParticles } from './hitParticles.js';
-import { onBeat, updateBeats } from './beat.js';
+import { onBeat, updateBeats, resetBeats } from './beat.js';
 
 /* ============================ Renderer ============================ */
 const renderer = new THREE.WebGLRenderer({
@@ -207,6 +209,12 @@ function beginCountdown(){
   const note = `${DIFF_LABELS[sel.difficultyIndex]} · ${SPEED_LABELS[sel.speedIndex]} · ${TIME_LABELS[sel.timeIndex]} · ${DDA_LABELS[sel.ddaIndex]} · ${BEAT_LABELS[sel.beatIndex]}`;
   hud.set({ note });
   hardResetRound(); menu.setVisible(false); setLasersVisible(false); hideBackToMenuButton();
+  if (MUSIC_ENABLED && MUSIC_URL){
+    playMusic(MUSIC_URL);
+  } else {
+    setBpm(DEFAULT_BPM);
+    resetBeats();
+  }
   game.menuActive=false; ensureCountdownPlane(); placeCountdown();
   countdown.active=true; countdown.time=3.999; countdown.lastDrawn=-1; drawCountdown(3);
 }
