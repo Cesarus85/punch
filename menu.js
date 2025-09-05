@@ -326,10 +326,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   // Unsichtbare Hit-Plane knapp vor den Buttons für Ray-Treffer/Laser
   const hitPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.80, 2.70, 1, 1),
+    new THREE.PlaneGeometry(2.6, 2.70, 1, 1),
     new THREE.MeshBasicMaterial({ transparent:true, opacity:0.0, depthWrite:false })
   );
-  hitPlane.position.z = 0.006;
+  hitPlane.position.set(0.375, 0, 0.006);
   hitPlane.name = 'menuHitPlane';
   group.add(hitPlane);
 
