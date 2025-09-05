@@ -406,24 +406,28 @@ function spawnHazard(sideSign){
     if (idx===undefined) continue;
     const velocity = _v2.copy(iForward).multiplyScalar(-tuning.hazardSpeed);
     const spin = (Math.random()<0.5?-1:1) * THREE.MathUtils.lerp(0.4,1.5,Math.random());
+    const orientation = Math.random() < 0.5 ? 0 : 1;
     let driftAmp = 0, driftOmega = 0, driftPhase = 0;
     if (DRIFT_ENABLED){
       // Platzhalter für zukünftige Hazard-Drifts
     }
     const prevDot = _v3.subVectors(_v1, iPos).dot(iForward);
-    hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase });
+    hazards.push({ index: idx, basePos: _v1.clone(), position: _v1.clone(), velocity: velocity.clone(), alive:true, prevDot, t:0, driftAmp, driftOmega, driftPhase, orientation });
     _m1.makeTranslation(_v1.x,_v1.y,_v1.z);
+    if (orientation < 0.5){
+      _m2.makeRotationZ(Math.PI * 0.5);
+      _m1.multiply(_m2);
+    }
     getHazardMesh().setMatrixAt(idx,_m1);
     getHazardMesh().instanceMatrix.needsUpdate = true;
     const attr = getHazardAttribute();
     const aIndex = idx*4;
     attr.array[aIndex+0] = spin;
+    attr.array[aIndex+1] = orientation;
     if (DRIFT_ENABLED){
-      attr.array[aIndex+1] = driftAmp;
-      attr.array[aIndex+2] = driftOmega;
-      attr.array[aIndex+3] = driftPhase;
+      attr.array[aIndex+2] = driftAmp;
+      attr.array[aIndex+3] = driftOmega;
     }else{
-      attr.array[aIndex+1] = 0;
       attr.array[aIndex+2] = 0;
       attr.array[aIndex+3] = 0;
     }
@@ -606,7 +610,7 @@ let spawnTimer=0;
 // Temp-Vektoren
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3(), _v6 = new THREE.Vector3(), _v7 = new THREE.Vector3();
-const _m1 = new THREE.Matrix4();
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4();
 let elapsed = 0;
 
 /* ---- Pattern-Engine State ---- */
@@ -810,6 +814,10 @@ function loop(){
     h.basePos.addScaledVector(h.velocity, dt);
     h.position.copy(h.basePos);
     _m1.makeTranslation(h.basePos.x, h.basePos.y, h.basePos.z);
+    if (h.orientation < 0.5){
+      _m2.makeRotationZ(Math.PI * 0.5);
+      _m1.multiply(_m2);
+    }
     getHazardMesh().setMatrixAt(h.index,_m1);
 
     const p = h.position;
