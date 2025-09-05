@@ -2,6 +2,14 @@
 import * as THREE from './three.js';
 import { setBodyConfig } from './config.js';
 
+// Hidden input element for capturing keyboard text input
+const hidden = document.createElement('input');
+hidden.type = 'text';
+hidden.style.position = 'absolute';
+hidden.style.opacity = '0';
+hidden.style.pointerEvents = 'none';
+document.body.appendChild(hidden);
+
 function makeCanvasPlane(w, h) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024; canvas.height = 256;
@@ -424,15 +432,31 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   let activeInput = null;
   function setActiveInput(field){
     if (activeInput === field) return;
-    if (activeInput){ activeInput.userData.focus = false; drawInputField(activeInput); }
+    if (activeInput){
+      activeInput.userData.focus = false;
+      drawInputField(activeInput);
+      hidden.value = '';
+      hidden.blur();
+    }
     activeInput = field;
-    if (activeInput){ activeInput.userData.focus = true; drawInputField(activeInput); }
+    if (activeInput){
+      hidden.value = activeInput.userData.text;
+      hidden.focus();
+      activeInput.userData.focus = true;
+      drawInputField(activeInput);
+    }
   }
+
+  hidden.addEventListener('input', () => {
+    if (!activeInput) return;
+    activeInput.userData.text = hidden.value;
+    drawInputField(activeInput);
+  });
 
   function handleKeydown(e){
     if (!activeInput) return;
     if (e.key === 'Enter'){
-      const val = parseFloat(activeInput.userData.text);
+      const val = parseFloat(hidden.value);
       if (!isNaN(val)){
         if (activeInput === heightField){
           heightVal = val;
@@ -446,17 +470,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
         updateStartDisabled();
       }
       setActiveInput(null);
-    } else if (e.key === 'Backspace'){
-      activeInput.userData.text = activeInput.userData.text.slice(0,-1);
-      drawInputField(activeInput);
-    } else if (/^[0-9.]$/.test(e.key)){
-      if (e.key === '.' && activeInput.userData.text.includes('.')) return;
-      activeInput.userData.text += e.key;
-      drawInputField(activeInput);
     }
   }
 
-  window.addEventListener('keydown', handleKeydown);
+  hidden.addEventListener('keydown', handleKeydown);
 
   // Layout mit mehr Abstand zwischen Reihen
   const rowY_diff   = 0.55;
