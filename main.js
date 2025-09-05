@@ -209,12 +209,6 @@ function beginCountdown(){
   const note = `${DIFF_LABELS[sel.difficultyIndex]} · ${SPEED_LABELS[sel.speedIndex]} · ${TIME_LABELS[sel.timeIndex]} · ${DDA_LABELS[sel.ddaIndex]} · ${BEAT_LABELS[sel.beatIndex]}`;
   hud.set({ note });
   hardResetRound(); menu.setVisible(false); setLasersVisible(false); hideBackToMenuButton();
-  if (MUSIC_ENABLED && MUSIC_URL){
-    playMusic(MUSIC_URL);
-  } else {
-    setBpm(DEFAULT_BPM);
-    resetBeats();
-  }
   game.menuActive=false; ensureCountdownPlane(); placeCountdown();
   countdown.active=true; countdown.time=3.999; countdown.lastDrawn=-1; drawCountdown(3);
 }
@@ -747,7 +741,12 @@ function loop(){
   if (countdown.active){
     countdown.time -= dt; const n=Math.max(0,Math.ceil(countdown.time));
     drawCountdown(n); placeCountdown();
-    if (countdown.time<=0){ countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true; updateHUD(''); }
+    if (countdown.time<=0){
+      countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true;
+      if (MUSIC_ENABLED && MUSIC_URL){ playMusic(MUSIC_URL); }
+      else { setBpm(DEFAULT_BPM); resetBeats(); }
+      updateHUD('');
+    }
     else { countdown.plane.visible=true; }
   }
 
