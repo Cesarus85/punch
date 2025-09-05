@@ -16,7 +16,7 @@ import {
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
-import { getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
+import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
@@ -273,6 +273,7 @@ function applyGamePreset(diffName, speedName, timeLabel){
 
 /* ======================== Assets & Score ======================== */
 await loadBall();
+await loadHazard();
 const balls=[], hazards=[];
 let hits=0, misses=0, score=0, streak=0, hazardHits=0;
 function comboMultiplier(){ if (streak<=0) return 1; const m=1+Math.floor(streak/5); return Math.min(4, m); }
@@ -391,7 +392,7 @@ function spawnBall(sideSign,{style='auto'}={}){
 }
 
 function spawnHazard(sideSign){
-  if (!poseLocked) return null;
+  if (!isHazardReady() || !poseLocked) return null;
 
   for (let attempt=0; attempt<MAX_SPAWN_TRIES; attempt++){
     const side = (attempt%2===0 ? sideSign : -sideSign);
@@ -835,7 +836,8 @@ function loop(){
 async function start(){
   try{ await loadBall(); scene.add(getBallMesh()); }
   catch(e){ console.error('ball.glb konnte nicht geladen werden:', e); }
-  scene.add(getHazardMesh());
+  try{ await loadHazard(); scene.add(getHazardMesh()); }
+  catch(e){ console.error('hantel.glb konnte nicht geladen werden:', e); }
   renderer.setAnimationLoop(loop);
 }
 renderer.xr.addEventListener('sessionend', ()=>{
