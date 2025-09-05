@@ -438,7 +438,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     updateStartDisabled();
   }
 
-  const startBtn   = makeButton('Starten',    1.20, 0.14); startBtn.userData.kind = 'start';
+  const startBtn   = makeButton('Starten',    0.60, 0.12); startBtn.userData.kind = 'start';
   startBtn.userData.disabled = true; // initially disabled
   const resumeBtn  = makeButton('Fortsetzen', 0.60, 0.12); resumeBtn.userData.kind = 'resume';
   const restartBtn = makeButton('Neu starten',0.60, 0.12); restartBtn.userData.kind = 'restart';
@@ -543,8 +543,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const rowY_beatLbl  = rowY_beat  + 0.12;
   const rowY_timeLbl  = rowY_time  + 0.10;
   const rowY_ctrl1  = -0.72; // restart
-  const rowY_ctrl2  = -0.80; // start/resume
-  const rowY_ctrl3  = -0.88; // quit
+  const rowY_ctrl2  = -0.80; // start/resume/quit
   const positionsX  = [-0.70, 0, 0.70];
   // Position the song selection panel with a small gap to the right of the main menu
   const songPanelX = 1.55;
@@ -568,10 +567,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   genderFemaleBtn.position.set(positionsX[2], rowY_body, 0.007);
   group.add(heightField, genderMaleBtn, genderFemaleBtn);
 
-  resumeBtn.position.set(0, rowY_ctrl2, 0.007);
+  resumeBtn.position.set(-0.35, rowY_ctrl2, 0.007);
   restartBtn.position.set(0, rowY_ctrl1, 0.007);
-  startBtn.position.set(0, rowY_ctrl2, 0.007);
-  quitBtn.position.set(0, rowY_ctrl3, 0.007);
+  startBtn.position.set(-0.35, rowY_ctrl2, 0.007);
+  quitBtn.position.set(0.35, rowY_ctrl2, 0.007);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
   // Auswahlzustand
