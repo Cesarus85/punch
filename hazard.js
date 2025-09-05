@@ -18,7 +18,7 @@ function makeMaterial(m){
   m.onBeforeCompile = (shader)=>{
     shader.uniforms.uTime = { value: 0 };
     shader.uniforms.uDissolveDuration = { value: DISSOLVE_DURATION };
-    shader.vertexShader = `attribute vec4 instData;\nattribute float dissolve;\nuniform float uTime;\nvarying float vDissolve;\n` + shader.vertexShader;
+    shader.vertexShader = `attribute vec4 instData;\nattribute vec3 instAxis;\nattribute float dissolve;\nuniform float uTime;\nvarying float vDissolve;\n` + shader.vertexShader;
     let driftChunk = '';
     if (DRIFT_ENABLED){
       driftChunk = `float drift = abs(instData.z) * sin(instData.w * uTime);\n`+
@@ -26,10 +26,10 @@ function makeMaterial(m){
     }
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
-      `\nvec3 transformed = vec3(position);\n` + driftChunk +
-      `float angle = instData.x * uTime;\n`+
-      `mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));\n`+
-      `if (instData.y < 0.5){\n  transformed.xy = rot * transformed.xy;\n}else{\n  transformed.yz = rot * transformed.yz;\n}\n`+
+      `\nvec3 axis = normalize(instAxis);\nfloat angle = instData.x * uTime;\nvec3 v = vec3(position);\n`+
+      `v = v * cos(angle)\n    + cross(axis, v) * sin(angle)\n    + axis * dot(axis, v) * (1.0 - cos(angle));\n`+
+      `vec3 transformed = v;\n` +
+      driftChunk +
       `vDissolve = dissolve;\n`
     );
     shader.fragmentShader = `uniform float uTime;\nuniform float uDissolveDuration;\nvarying float vDissolve;\n` + shader.fragmentShader;
@@ -46,6 +46,7 @@ const loader = new GLTFLoader();
 let ready = false;
 let mesh = null;
 let instAttr = null;
+let instAxisAttr = null;
 let dissolveAttr = null;
 const freeIdx = [];
 const _m = new THREE.Matrix4();
@@ -76,6 +77,9 @@ export function loadHazard(){
         const arr = new Float32Array(MAX_HAZARDS*4);
         instAttr = new THREE.InstancedBufferAttribute(arr, 4);
         mesh.geometry.setAttribute('instData', instAttr);
+        const axisArr = new Float32Array(MAX_HAZARDS*3);
+        instAxisAttr = new THREE.InstancedBufferAttribute(axisArr, 3);
+        mesh.geometry.setAttribute('instAxis', instAxisAttr);
         const dissArr = new Float32Array(MAX_HAZARDS).fill(-1);
         dissolveAttr = new THREE.InstancedBufferAttribute(dissArr, 1);
         mesh.geometry.setAttribute('dissolve', dissolveAttr);
@@ -99,6 +103,7 @@ export function loadHazard(){
 export function isHazardReady(){ return ready; }
 export function getHazardMesh(){ return mesh; }
 export function getHazardAttribute(){ return instAttr; }
+export function getHazardAxisAttribute(){ return instAxisAttr; }
 export function getDissolveAttribute(){ return dissolveAttr; }
 export function allocHazard(){ return freeIdx.pop(); }
 export function freeHazard(idx){
@@ -108,6 +113,11 @@ export function freeHazard(idx){
   const aIdx = idx*4;
   instAttr.array[aIdx]=instAttr.array[aIdx+1]=instAttr.array[aIdx+2]=instAttr.array[aIdx+3]=0;
   instAttr.needsUpdate = true;
+  if(instAxisAttr){
+    const axIdx = idx*3;
+    instAxisAttr.array[axIdx]=instAxisAttr.array[axIdx+1]=instAxisAttr.array[axIdx+2]=0;
+    instAxisAttr.needsUpdate = true;
+  }
   if(dissolveAttr){
     dissolveAttr.array[idx] = -1;
     dissolveAttr.needsUpdate = true;
