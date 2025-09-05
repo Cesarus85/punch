@@ -473,7 +473,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   function handleKeydown(e){
     if (!activeInput) return;
     if (e.key === 'Enter'){
-      const val = parseFloat(hidden.value);
+      const val = parseFloat(hidden.value.replace(',', '.'));
       if (!isNaN(val)){
         if (activeInput === heightField){
           heightVal = val;
