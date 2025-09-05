@@ -94,6 +94,14 @@ export async function playMusic(url){
   }
 }
 
+export function pauseMusic(){
+  if (ctx && ctx.state === 'running'){ ctx.suspend(); }
+}
+
+export function resumeMusic(){
+  if (ctx && ctx.state === 'suspended'){ ctx.resume(); }
+}
+
 export function stopMusic(){
   if (musicSource){
     try{ musicSource.stop(); }catch{}

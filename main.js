@@ -26,7 +26,7 @@ import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
 import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, getHazardAxisAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
-import { hitSound, missSound, penaltySound, playMusic } from './audio.js';
+import { hitSound, missSound, penaltySound, playMusic, pauseMusic, resumeMusic } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
 import { flashHit, flashMiss, hazardFlash } from './effects.js';
@@ -610,11 +610,13 @@ function isRisingEdgeAX(gp, key, store){
 let _pausedSpawnTimer = 0;
 function openMenuIngame(){
   game.running=false; hud.plane.visible=false; _pausedSpawnTimer = spawnTimer;
+  pauseMusic();
   clearActiveObjectsKeepScore(); hideBackToMenuButton();
   menu.placeAt(iPos, iForward); menu.setMode('ingame'); menu.setVisible(true); setLasersVisible(true); game.menuActive=true;
 }
 function closeMenuResume(){
   menu.setVisible(false); setLasersVisible(false);
+  resumeMusic();
   game.menuActive=false; game.running=true; hud.plane.visible=true; hideBackToMenuButton();
   spawnTimer = _pausedSpawnTimer;
 }
