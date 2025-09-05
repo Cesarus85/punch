@@ -5,7 +5,7 @@ import {
   BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT,
   BALL_SPEED, SPAWN_INTERVAL, MISS_PLANE_OFFSET, SPAWN_BIAS,
   DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
-  AUDIO_ENABLED, HAPTICS_ENABLED, MUSIC_ENABLED, MUSIC_URL,
+  AUDIO_ENABLED, HAPTICS_ENABLED, MUSIC_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
   HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION,
   DEBUG_HAZARD_RING_MS,
@@ -198,7 +198,6 @@ function placeCountdown(){
 }
 function beginCountdown(){
   const sel = menu.getSelection();
-  game.songUrl = sel.songUrl || null;
   applyGamePreset(
     DIFF_LABELS[sel.difficultyIndex],
     SPEED_LABELS[sel.speedIndex],
@@ -585,9 +584,9 @@ for (const c of controllers){
     const hit = intersectHitPlane(c); if (!hit) return;
     const btn = menu.pickButtonAtWorldPoint(hit.point);
     const action = menu.click(btn); if (!action) return;
-    if (action.action==='start'){ beginCountdown(); }
+    if (action.action==='start'){ game.songUrl = action.songUrl || null; beginCountdown(); }
     else if (action.action==='resume'){ closeMenuResume(); }
-    else if (action.action==='restart'){ beginCountdown(); }
+    else if (action.action==='restart'){ game.songUrl = action.songUrl || null; beginCountdown(); }
     else if (action.action==='quit'){ const s=renderer.xr.getSession?.(); if (s) s.end(); }
   });
 }
@@ -743,7 +742,7 @@ function loop(){
     drawCountdown(n); placeCountdown();
     if (countdown.time<=0){
       countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true;
-      if (MUSIC_ENABLED && (game.songUrl || MUSIC_URL)){ playMusic(game.songUrl || MUSIC_URL); }
+      if (MUSIC_ENABLED && game.songUrl){ playMusic(game.songUrl); }
       else { setBpm(DEFAULT_BPM); resetBeats(); }
       updateHUD('');
     }

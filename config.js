@@ -49,7 +49,6 @@ export const DRIFT_MAX_FREQ = 1.6;       // Hz
 export const AUDIO_ENABLED = true;
 export const HAPTICS_ENABLED = true;
 export let MUSIC_ENABLED = true;
-export const MUSIC_URL = './assets/music.mp3';
 export function setMusicEnabled(v){ MUSIC_ENABLED = !!v; }
 
 // --- Effects ---
