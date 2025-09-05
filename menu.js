@@ -407,12 +407,14 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   let songButtons = [];
   let selSong = -1;
   let selSongUrl = null;
+  let selectedTrack = null;
   const timeDirs = ['1_min','3_min','5_min'];
   async function loadSongsForTime(idx){
     songButtons.forEach(b => group.remove(b));
     songButtons = [];
     selSong = -1;
     selSongUrl = null;
+    selectedTrack = null;
     const dir = timeDirs[idx];
     try {
       const res = await fetch(`./assets/music/${dir}/manifest.json`);
@@ -428,14 +430,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
         songButtons.push(b);
         drawButton(b);
       });
-      if (songButtons.length > 0){
-        selSong = 0;
-        selSongUrl = songButtons[0].userData.url;
-        setSelected(songButtons, selSong);
-      }
+      setSelected(songButtons, -1);
     } catch(err){
       console.error('loadSongsForTime', err);
     }
+    updateStartDisabled();
   }
 
   const startBtn   = makeButton('Starten',    1.48, 0.16); startBtn.userData.kind = 'start';
@@ -468,7 +467,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   let startDisabled = true;
   function updateStartDisabled(){
-    startDisabled = isNaN(heightVal) || isNaN(shoulderVal);
+    startDisabled = isNaN(heightVal) || isNaN(shoulderVal) || selectedTrack === null;
     startBtn.userData.disabled = startDisabled || mode !== 'prestart';
     drawButton(startBtn);
   }
@@ -603,6 +602,12 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   function setMode(m){
     mode = m;
     const pre = (mode==='prestart');
+    if (pre){
+      selectedTrack = null;
+      selSong = -1;
+      selSongUrl = null;
+      setSelected(songButtons, -1);
+    }
     startBtn.visible   = pre;
     resumeBtn.visible  = !pre;
     restartBtn.visible = !pre;
@@ -674,7 +679,14 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='beat'){ selBeat=index; setSelected(beatButtons, selBeat); ls?.setItem('selBeat', selBeat.toString()); return { action:'set-beat', value: selBeat }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); ls?.setItem('selTime', selTime.toString()); loadSongsForTime(selTime); return { action:'set-time', value: selTime }; }
-    if (kind==='song'){ selSong=index; selSongUrl=btn.userData.url; setSelected(songButtons, selSong); return { action:'set-song', value: selSong }; }
+    if (kind==='song'){
+      selSong=index;
+      selSongUrl=btn.userData.url;
+      selectedTrack = btn.userData.url;
+      setSelected(songButtons, selSong);
+      updateStartDisabled();
+      return { action:'set-song', value: selSong };
+    }
     if (kind==='height'){ setActiveInput(heightField); return null; }
     if (kind==='gender'){
       shoulderVal = (btn.userData.gender==='male') ? 0.47 : 0.36;
