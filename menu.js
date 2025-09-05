@@ -403,21 +403,25 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   // Werte für Körperkonfiguration
   let heightVal = parseFloat(sessionStorage.getItem('height'));   // m
   let shoulderVal = parseFloat(sessionStorage.getItem('shoulderWidth')); // m
+  const storedGender = sessionStorage.getItem('gender');
+  if (storedGender === 'male' && isNaN(shoulderVal)) shoulderVal = 0.47;
+  if (storedGender === 'female' && isNaN(shoulderVal)) shoulderVal = 0.36;
   if (isNaN(heightVal)) heightVal = NaN;
   if (isNaN(shoulderVal)) shoulderVal = NaN;
 
-  // Eingabefelder für Größe und Schulterbreite
+  // Eingabefeld für Größe und Geschlechter-Buttons
   const heightField = makeInputField('Größe', 0.60, 0.14); heightField.userData.kind = 'height';
-  const shoulderField = makeInputField('Schulter', 0.60, 0.14); shoulderField.userData.kind = 'shoulder';
+  const genderMaleBtn = makeButton('Männlich', 0.42, 0.14); genderMaleBtn.userData.kind = 'gender'; genderMaleBtn.userData.gender = 'male';
+  const genderFemaleBtn = makeButton('Weiblich', 0.42, 0.14); genderFemaleBtn.userData.kind = 'gender'; genderFemaleBtn.userData.gender = 'female';
+  const genderButtons = [genderMaleBtn, genderFemaleBtn];
+  let selGender = storedGender === 'male' ? 0 : storedGender === 'female' ? 1 : -1;
 
   function updateHeightField(){
     heightField.userData.text = isNaN(heightVal) ? '' : heightVal.toFixed(2);
     drawInputField(heightField);
   }
-  function updateShoulderField(){
-    shoulderField.userData.text = isNaN(shoulderVal) ? '' : shoulderVal.toFixed(2);
-    drawInputField(shoulderField);
-  }
+
+  genderButtons.forEach(b=>drawButton(b));
 
   let startDisabled = true;
   function updateStartDisabled(){
@@ -427,7 +431,6 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   }
 
   updateHeightField();
-  updateShoulderField();
 
   let activeInput = null;
   function setActiveInput(field){
@@ -461,10 +464,6 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
         heightVal = val;
         sessionStorage.setItem('height', val.toString());
         updateHeightField();
-      } else if (activeInput === shoulderField){
-        shoulderVal = val;
-        sessionStorage.setItem('shoulderWidth', val.toString());
-        updateShoulderField();
       }
       updateStartDisabled();
     }
@@ -479,10 +478,6 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
           heightVal = val;
           sessionStorage.setItem('height', val.toString());
           updateHeightField();
-        } else if (activeInput === shoulderField){
-          shoulderVal = val;
-          sessionStorage.setItem('shoulderWidth', val.toString());
-          updateShoulderField();
         }
         updateStartDisabled();
       }
@@ -497,7 +492,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const rowY_speed  = 0.25;
   const rowY_dda    = -0.05;
   const rowY_time   = -0.35;
-  const rowY_body   = -0.55; // Größe/Schulter
+  const rowY_body   = -0.55; // Größe/Geschlecht
   const rowY_diffLbl  = rowY_diff  + 0.18;
   const rowY_speedLbl = rowY_speed + 0.18;
   const rowY_ddaLbl   = rowY_dda   + 0.18;
@@ -505,7 +500,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   const rowY_ctrl1  = -0.75; // resume/restart
   const rowY_ctrl2  = -0.95; // start
   const rowY_ctrl3  = -1.15; // quit
-  const positionsX  = [-0.50, 0, 0.50];
+  const positionsX  = [-0.60, 0, 0.60];
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
   speedLabelMesh.position.set(0, rowY_speedLbl, 0.007); group.add(speedLabelMesh);
@@ -517,10 +512,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda,   0.007); group.add(b); });
   timeButtons.forEach((b,i)=>{  b.position.set(positionsX[i], rowY_time,  0.007); group.add(b); });
 
-  // Größe/Schulter Eingabefelder
-  heightField.position.set(-0.35, rowY_body, 0.007);
-  shoulderField.position.set(0.35, rowY_body, 0.007);
-  group.add(heightField, shoulderField);
+  // Größe und Geschlecht
+  heightField.position.set(positionsX[0], rowY_body, 0.007);
+  genderMaleBtn.position.set(positionsX[1], rowY_body, 0.007);
+  genderFemaleBtn.position.set(positionsX[2], rowY_body, 0.007);
+  group.add(heightField, genderMaleBtn, genderFemaleBtn);
 
   resumeBtn.position.set(-0.35, rowY_ctrl1, 0.007);
   restartBtn.position.set(+0.35, rowY_ctrl1, 0.007);
@@ -535,6 +531,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   setSelected(speedButtons, selSpeed);
   setSelected(timeButtons, selTime);
   setSelected(ddaButtons, selDda);
+  if (selGender >= 0) setSelected(genderButtons, selGender);
 
   // Modus: 'prestart' | 'ingame'
   let mode = 'prestart';
@@ -556,7 +553,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
   // Hover zentral
   let hoveredBtn = null;
   function drawElement(o){
-    if (o.userData.kind==='height' || o.userData.kind==='shoulder') drawInputField(o);
+    if (o.userData.kind==='height') drawInputField(o);
     else drawButton(o);
   }
   function clearHover(){ if (hoveredBtn){ hoveredBtn.userData.hover=false; drawElement(hoveredBtn); hoveredBtn=null; } }
@@ -584,7 +581,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     const x=local.x, y=local.y;
     const candidates = [
       ...diffButtons, ...speedButtons, ...ddaButtons, ...timeButtons,
-      heightField, shoulderField,
+      heightField, ...genderButtons,
       startBtn, resumeBtn, restartBtn, quitBtn
     ].filter(o => o.visible && !o.userData.disabled && o.userData.kind!=='label');
     for (const b of candidates){
@@ -603,7 +600,15 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels) {
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); return { action:'set-time', value: selTime }; }
     if (kind==='height'){ setActiveInput(heightField); return null; }
-    if (kind==='shoulder'){ setActiveInput(shoulderField); return null; }
+    if (kind==='gender'){
+      shoulderVal = (btn.userData.gender==='male') ? 0.47 : 0.36;
+      sessionStorage.setItem('shoulderWidth', shoulderVal.toString());
+      sessionStorage.setItem('gender', btn.userData.gender);
+      selGender = btn.userData.gender==='male' ? 0 : 1;
+      setSelected(genderButtons, selGender);
+      updateStartDisabled();
+      return null;
+    }
     if (kind==='start'){
       const height = heightVal;
       const shoulder = shoulderVal;

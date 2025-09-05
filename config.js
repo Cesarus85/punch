@@ -63,7 +63,7 @@ export const COMBO_MAX_MULT = 5;              // max. x5
 
 // --- Player Body Configuration ---
 export let BODY_HEIGHT = 1.75;                // default body height in meters
-export let SHOULDER_WIDTH = 0.56;             // default shoulder width in meters
+export let SHOULDER_WIDTH = 0.47;             // default shoulder width in meters
 export let BODY_CAPSULE_HEIGHT = 1.10;        // used for hazard collision (head to hip)
 // Reduced radius to delay hazard collisions until actual body contact (~15 cm less)
 export let BODY_CAPSULE_RADIUS = 0.13;        // half of default shoulder width minus 0.15 m
