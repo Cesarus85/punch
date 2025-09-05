@@ -3,7 +3,7 @@ import { ARButton } from 'https://unpkg.com/three@0.166.1/examples/jsm/webxr/ARB
 
 import {
   BALL_RADIUS, FIST_RADIUS, SPAWN_DISTANCE, SIDE_OFFSET, SIDE_OFFSET_TIGHT,
-  BALL_SPEED, SPAWN_INTERVAL, SPAWN_MAX_BELOW, MISS_PLANE_OFFSET, SPAWN_BIAS,
+  BALL_SPEED, SPAWN_INTERVAL, MISS_PLANE_OFFSET, SPAWN_BIAS,
   DRIFT_ENABLED, DRIFT_MIN_AMPLITUDE, DRIFT_MAX_AMPLITUDE, DRIFT_MIN_FREQ, DRIFT_MAX_FREQ,
   AUDIO_ENABLED, HAPTICS_ENABLED,
   HAZARD_ENABLED, HAZARD_PROB, HAZARD_RADIUS, HAZARD_SPEED, HAZARD_PENALTY,
@@ -12,7 +12,9 @@ import {
   MIN_SPAWN_DISTANCE,
   DISSOLVE_DURATION,
   BODY_CAPSULE_HEIGHT,
-  BODY_CAPSULE_RADIUS
+  BODY_CAPSULE_RADIUS,
+  getSpawnMaxBelow,
+  setFloorOffset
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -71,6 +73,7 @@ const iForward = new THREE.Vector3(), iUp = new THREE.Vector3(), iRight = new TH
 
 function lockInitialPose(){
   iPos.setFromMatrixPosition(camera.matrixWorld);
+  setFloorOffset(iPos.y); // Floor-Offset für Körpergröße ermitteln
   iQuat.copy(camera.quaternion);
   iForward.set(0,0,-1).applyQuaternion(iQuat).normalize();
   iUp.set(0,1,0).applyQuaternion(iQuat).normalize();
@@ -321,7 +324,7 @@ function spawnBall(sideSign,{style='auto'}={}){
     const side = (attempt%2===0 ? sideSign : -sideSign);
 
     let sideMag = Math.random() < 0.5 ? SIDE_OFFSET_TIGHT : SIDE_OFFSET;
-    let heightOffset = -Math.random() * SPAWN_MAX_BELOW;
+    let heightOffset = -Math.random() * getSpawnMaxBelow();
 
     // Extra breit/tief (nie beides)
     let extWide = Math.random() < tuning.wideProb;
@@ -401,7 +404,7 @@ function spawnHazard(sideSign){
   for (let attempt=0; attempt<MAX_SPAWN_TRIES; attempt++){
     const side = (attempt%2===0 ? sideSign : -sideSign);
     const sideMag = Math.random() < 0.5 ? SIDE_OFFSET : SIDE_OFFSET_TIGHT;
-    const heightOffset = -Math.random() * SPAWN_MAX_BELOW;
+    const heightOffset = -Math.random() * getSpawnMaxBelow();
     _v1.copy(iPos).addScaledVector(iForward, (SPAWN_DISTANCE - SPAWN_BIAS)).addScaledVector(iRight, sideMag*side).addScaledVector(iUp, heightOffset);
 
     if (!isSpawnPosClear(_v1)) continue;
