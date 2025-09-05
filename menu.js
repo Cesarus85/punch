@@ -701,10 +701,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
       const height = heightVal;
       const shoulder = shoulderVal;
       setBodyConfig({ height, shoulderWidth: shoulder });
-      return { action:'start' };
+      return { action:'start', songUrl: selSongUrl };
     }
     if (kind==='resume')  return { action:'resume' };
-    if (kind==='restart') return { action:'restart' };
+    if (kind==='restart') return { action:'restart', songUrl: selSongUrl };
     if (kind==='quit')    return { action:'quit' };
     return null;
   }
