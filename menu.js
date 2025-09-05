@@ -543,9 +543,9 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   let selDiff = loadIdx('selDiff', diffLabels.length, 0);
   let selSpeed = loadIdx('selSpeed', speedLabels.length, 1);
-  let selTime  = loadIdx('selTime',  timeLabels.length, 0);
+  let selTime  = loadIdx('selTime', 3, 0);
   let selBeat  = loadIdx('selBeat',  beatLabels.length, 1);
-  let selDda = 2; // Endlos default, DDA 100%
+  let selDda = 2; // DDA 100%
   const setSelected = (arr, idx) => arr.forEach((b,i)=>{ b.userData.selected=(i===idx); drawButton(b); });
   setSelected(diffButtons, selDiff);
   setSelected(speedButtons, selSpeed);

@@ -155,7 +155,7 @@ function rumble(intensity=0.8, durationMs=60){
 /* =================== Menü / Presets / Zeitmodi =================== */
 const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi'];
 const SPEED_LABELS = ['Langsam','Mittel','Schnell'];
-const TIME_LABELS  = ['Endlos','1:00','3:00','5:00'];
+const TIME_LABELS  = ['1:00','3:00','5:00'];
 const DDA_LABELS  = ['Aus','50%','100%'];
 const BEAT_LABELS = ['Aus','An'];
 
@@ -251,8 +251,8 @@ const DDA_CFG = {
 let ddaTimer = 0;
 let lastDdaHits = 0, lastDdaMisses = 0, lastDdaHazHits = 0;
 
-let gameMode = 'endless'; // 'endless' | 'time60' | 'time180' | 'time300'
-let timeLeft = null;
+let gameMode = 'time60'; // 'time60' | 'time180' | 'time300'
+let timeLeft = 60;
 
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
@@ -273,11 +273,10 @@ function applyGamePreset(diffName, speedName, timeLabel){
   tuning.hazardSpeed = HAZARD_SPEED * sMul;
   tuning.hazardProb  = baseHazardProb;
 
-  if (timeLabel==='Endlos'){ gameMode='endless'; timeLeft=null; }
-  else if (timeLabel==='1:00'){ gameMode='time60'; timeLeft=60; }
+  if (timeLabel==='1:00'){ gameMode='time60'; timeLeft=60; }
   else if (timeLabel==='3:00'){ gameMode='time180'; timeLeft=180; }
   else if (timeLabel==='5:00'){ gameMode='time300'; timeLeft=300; }
-  else { gameMode='endless'; timeLeft=null; }
+  else { gameMode='time60'; timeLeft=60; }
 
   // DDA Reset
   ddaTimer = 0;
