@@ -7,7 +7,8 @@ export const SIDE_OFFSET_TIGHT = 0.25;  // m links/rechts (eng)
 export const TIGHT_PROB = 0.45;         // Wahrscheinlichkeit für "eng"
 export const BALL_SPEED = 1.6;          // m/s
 export const SPAWN_INTERVAL = 0.65;     // s
-export const SPAWN_MAX_BELOW = 0.70;    // m (max. 70 cm unter Headset)
+// Dynamische Spawn-Höhe basierend auf Körpergröße (z.B. Brusthöhe ~60 %)
+export const SPAWN_HEIGHT_RATIO = 0.6;  // Anteil der Körperhöhe für Spawns
 export const MISS_PLANE_OFFSET = 0.02;  // m vor der initialen Ebene
 export const SPAWN_BIAS = 0.20;         // m (20 cm näher zu dir, reduziert Wand-Occlusion)
 export const MIN_SPAWN_DISTANCE = 0.35; // m Mindestabstand zwischen Spawns
@@ -75,4 +76,20 @@ export function setBodyConfig({ height, shoulderWidth } = {}) {
     SHOULDER_WIDTH = shoulderWidth;
     BODY_CAPSULE_RADIUS = shoulderWidth / 2;
   }
+}
+
+// --- Floor Offset & Spawn Utilities ---
+// Gemessene Kopf-/Bodenhöhe (wird beim Setup aktualisiert)
+export let FLOOR_OFFSET = BODY_HEIGHT;
+
+export function setFloorOffset(offset) {
+  if (typeof offset === 'number' && offset > 0) {
+    FLOOR_OFFSET = offset;
+    BODY_HEIGHT = offset; // absolute Körpergröße merken
+  }
+}
+
+export function getSpawnMaxBelow() {
+  // Differenz zwischen Kopf und gewünschter Spawn-Höhe
+  return FLOOR_OFFSET * (1 - SPAWN_HEIGHT_RATIO);
 }
