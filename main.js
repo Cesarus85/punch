@@ -16,7 +16,7 @@ import {
 import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
-import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
+import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, getHazardAxisAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
 import { hitSound, missSound, penaltySound } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
@@ -424,6 +424,13 @@ function spawnHazard(sideSign){
     const attr = getHazardAttribute();
     const aIndex = idx*4;
     attr.array[aIndex+0] = spin;
+    const axisAttr = getHazardAxisAttribute();
+    const axIndex = idx*3;
+    _v4.set(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1).normalize();
+    axisAttr.array[axIndex+0] = _v4.x;
+    axisAttr.array[axIndex+1] = _v4.y;
+    axisAttr.array[axIndex+2] = _v4.z;
+    axisAttr.needsUpdate = true;
     attr.array[aIndex+1] = orientationFlag;
     if (DRIFT_ENABLED){
       attr.array[aIndex+2] = driftAmp;
