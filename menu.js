@@ -401,6 +401,43 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     return b;
   });
 
+  // Panel und Buttons für Musikauswahl
+  const songPanel = makePanelBG(0.80, 1.20);
+  group.add(songPanel);
+  let songButtons = [];
+  let selSong = -1;
+  let selSongUrl = null;
+  const timeDirs = ['1_min','3_min','5_min'];
+  async function loadSongsForTime(idx){
+    songButtons.forEach(b => group.remove(b));
+    songButtons = [];
+    selSong = -1;
+    selSongUrl = null;
+    const dir = timeDirs[idx];
+    try {
+      const res = await fetch(`./assets/music/${dir}/manifest.json`);
+      const list = await res.json();
+      const startY = rowY_time + 0.30;
+      list.forEach((item,i) => {
+        const b = makeButton(item.name || item.file || item, 0.42, 0.14);
+        b.userData.kind = 'song';
+        b.userData.index = i;
+        b.userData.url = `./assets/music/${dir}/${item.file || item}`;
+        b.position.set(songPanelX, startY - i*0.18, 0.007);
+        group.add(b);
+        songButtons.push(b);
+        drawButton(b);
+      });
+      if (songButtons.length > 0){
+        selSong = 0;
+        selSongUrl = songButtons[0].userData.url;
+        setSelected(songButtons, selSong);
+      }
+    } catch(err){
+      console.error('loadSongsForTime', err);
+    }
+  }
+
   const startBtn   = makeButton('Starten',    1.48, 0.16); startBtn.userData.kind = 'start';
   startBtn.userData.disabled = true; // initially disabled
   const resumeBtn  = makeButton('Fortsetzen', 0.70, 0.14); resumeBtn.userData.kind = 'resume';
@@ -509,6 +546,8 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const rowY_ctrl2  = -1.35; // start/resume
   const rowY_ctrl3  = -1.55; // quit
   const positionsX  = [-0.60, 0, 0.60];
+  const songPanelX = 1.25;
+  songPanel.position.set(songPanelX, rowY_time - 0.20, 0.006);
 
   diffLabelMesh.position.set(0, rowY_diffLbl, 0.007);  group.add(diffLabelMesh);
   speedLabelMesh.position.set(0, rowY_speedLbl, 0.007); group.add(speedLabelMesh);
@@ -521,6 +560,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda, 0.007); group.add(b); });
   beatButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_beat, 0.007); group.add(b); });
   timeButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_time, 0.007); group.add(b); });
+  loadSongsForTime(selTime);
 
   // Größe und Geschlecht
   heightField.position.set(positionsX[0], rowY_body, 0.007);
@@ -614,6 +654,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     const x=local.x, y=local.y;
     const candidates = [
       ...diffButtons, ...speedButtons, ...ddaButtons, ...beatButtons, ...timeButtons,
+      ...songButtons,
       heightField, ...genderButtons,
       startBtn, resumeBtn, restartBtn, quitBtn
     ].filter(o => o.visible && !o.userData.disabled && o.userData.kind!=='label');
@@ -632,7 +673,8 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); ls?.setItem('selSpeed', selSpeed.toString()); return { action:'set-speed', value: selSpeed }; }
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='beat'){ selBeat=index; setSelected(beatButtons, selBeat); ls?.setItem('selBeat', selBeat.toString()); return { action:'set-beat', value: selBeat }; }
-    if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); ls?.setItem('selTime', selTime.toString()); return { action:'set-time', value: selTime }; }
+    if (kind==='time'){ selTime=index; setSelected(timeButtons, selTime); ls?.setItem('selTime', selTime.toString()); loadSongsForTime(selTime); return { action:'set-time', value: selTime }; }
+    if (kind==='song'){ selSong=index; selSongUrl=btn.userData.url; setSelected(songButtons, selSong); return { action:'set-song', value: selSong }; }
     if (kind==='height'){ setActiveInput(heightField); return null; }
     if (kind==='gender'){
       shoulderVal = (btn.userData.gender==='male') ? 0.47 : 0.36;
@@ -655,7 +697,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     return null;
   }
 
-  function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime, ddaIndex: selDda, beatIndex: selBeat }; }
+  function getSelection(){ return { difficultyIndex: selDiff, speedIndex: selSpeed, timeIndex: selTime, ddaIndex: selDda, beatIndex: selBeat, songUrl: selSongUrl }; }
   
   function updateAnimation(currentTime) {
     if (panel.userData.material && panel.userData.material.uniforms) {
