@@ -559,7 +559,6 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda, 0.007); group.add(b); });
   beatButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_beat, 0.007); group.add(b); });
   timeButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_time, 0.007); group.add(b); });
-  loadSongsForTime(selTime);
 
   // Größe und Geschlecht
   heightField.position.set(positionsX[0], rowY_body, 0.007);
@@ -596,6 +595,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   ls?.setItem('selTime', selTime.toString());
   ls?.setItem('selBeat', selBeat.toString());
   if (selGender >= 0) setSelected(genderButtons, selGender);
+  loadSongsForTime(selTime);
 
   // Modus: 'prestart' | 'ingame'
   let mode = 'prestart';
