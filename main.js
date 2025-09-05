@@ -14,7 +14,10 @@ import {
   BODY_CAPSULE_HEIGHT,
   BODY_CAPSULE_RADIUS,
   getSpawnMaxBelow,
-  setFloorOffset
+  setFloorOffset,
+  BEAT_DURATION,
+  BEAT_SNAP_ENABLED,
+  setBeatSnapEnabled
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -26,6 +29,7 @@ import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
 import { flashHit, flashMiss, hazardFlash } from './effects.js';
 import { HitParticles } from './hitParticles.js';
+import { onBeat, updateBeats } from './beat.js';
 
 /* ============================ Renderer ============================ */
 const renderer = new THREE.WebGLRenderer({
@@ -151,6 +155,7 @@ const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi'];
 const SPEED_LABELS = ['Langsam','Mittel','Schnell'];
 const TIME_LABELS  = ['Endlos','1:00','3:00','5:00'];
 const DDA_LABELS  = ['Aus','50%','100%'];
+const BEAT_LABELS = ['Aus','An'];
 
 const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25 };
 const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
@@ -162,7 +167,7 @@ const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,de
 // Vertikale S-Kurve: sanfter Downtrend
 const VDRIFT_BIAS_MIN = 0.05, VDRIFT_BIAS_MAX = 0.15;
 
-const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS, DDA_LABELS);
+const menu = createMenu(DIFF_LABELS, SPEED_LABELS, TIME_LABELS, DDA_LABELS, BEAT_LABELS);
 menu.group.visible = false; scene.add(menu.group);
 
 /* ====================== Countdown (throttled) ====================== */
@@ -196,9 +201,10 @@ function beginCountdown(){
     SPEED_LABELS[sel.speedIndex],
     TIME_LABELS[sel.timeIndex]
   );
+  setBeatSnapEnabled(sel.beatIndex === 1);
   const strengthMap = [0, 0.5, 1];
   DDA_CFG.strength = strengthMap[sel.ddaIndex] ?? 1;
-  const note = `${DIFF_LABELS[sel.difficultyIndex]} · ${SPEED_LABELS[sel.speedIndex]} · ${TIME_LABELS[sel.timeIndex]} · ${DDA_LABELS[sel.ddaIndex]}`;
+  const note = `${DIFF_LABELS[sel.difficultyIndex]} · ${SPEED_LABELS[sel.speedIndex]} · ${TIME_LABELS[sel.timeIndex]} · ${DDA_LABELS[sel.ddaIndex]} · ${BEAT_LABELS[sel.beatIndex]}`;
   hud.set({ note });
   hardResetRound(); menu.setVisible(false); setLasersVisible(false); hideBackToMenuButton();
   game.menuActive=false; ensureCountdownPlane(); placeCountdown();
@@ -620,6 +626,7 @@ function hideBackToMenuButton(){ backBtn.visible = false; backBtn.userData.hover
 /* ============================= Loop ============================= */
 const clock = new THREE.Clock();
 let spawnTimer=0;
+let beatCounter=0;
 
 // Temp-Vektoren
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -639,9 +646,41 @@ function ensurePattern(){
   }
 }
 
+function performSpawn(){
+  ensurePattern();
+  const step = curPattern.steps[curStepIdx++];
+  if (step && step.items){
+    let budget = MAX_ACTIVE_BODIES - (balls.length + hazards.length);
+    for (const it of step.items){
+      if (budget <= 0) break;
+      spawnBall(it.side, { style: it.style || 'auto' });
+      budget--;
+    }
+  }
+  if (HAZARD_ENABLED && Math.random()<tuning.hazardProb){
+    const side = Math.random()<0.5 ? -1 : +1;
+    const pos = spawnHazard(side);
+    if (pos) flashSpawnRingAt(pos);
+  }
+}
+
+onBeat(4, () => {
+  if (!BEAT_SNAP_ENABLED) return;
+  const canSpawn = game.running && (timeLeft == null || timeLeft > 0);
+  if (canSpawn && (balls.length + hazards.length) < MAX_ACTIVE_BODIES){
+    const beatsNeeded = Math.max(1, Math.round(tuning.spawnInterval / (BEAT_DURATION / 4)));
+    beatCounter++;
+    if (beatCounter >= beatsNeeded){
+      beatCounter = 0;
+      performSpawn();
+    }
+  }
+});
+
 function loop(){
   const dt = clock.getDelta();
   elapsed += dt;
+  updateBeats(dt);
   const shader = getBallMesh()?.material?.userData?.shader;
   if (shader) shader.uniforms.uTime.value = elapsed;
   const hShader = getHazardMesh()?.material?.userData?.shader;
@@ -770,27 +809,9 @@ function loop(){
 
   // Spawner: Pattern-getrieben
   spawnTimer += dt;
-  if (canSpawn && (balls.length + hazards.length) < MAX_ACTIVE_BODIES && spawnTimer >= tuning.spawnInterval){
+  if (!BEAT_SNAP_ENABLED && canSpawn && (balls.length + hazards.length) < MAX_ACTIVE_BODIES && spawnTimer >= tuning.spawnInterval){
     spawnTimer = 0;
-
-    // 1) Balls nach Pattern
-    ensurePattern();
-    const step = curPattern.steps[curStepIdx++];
-    if (step && step.items){
-      let budget = MAX_ACTIVE_BODIES - (balls.length + hazards.length);
-      for (const it of step.items){
-        if (budget <= 0) break;
-        spawnBall(it.side, { style: it.style || 'auto' });
-        budget--;
-      }
-    }
-
-    // 2) Hazard ggf. zusätzlich
-    if (HAZARD_ENABLED && Math.random()<tuning.hazardProb){
-      const side = Math.random()<0.5 ? -1 : +1;
-      const pos = spawnHazard(side);
-      if (pos) flashSpawnRingAt(pos);
-    }
+    performSpawn();
   }
 
   // Debug-Ring-Timer
