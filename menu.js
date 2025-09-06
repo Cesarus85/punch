@@ -552,8 +552,7 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const rowY_ddaLbl   = rowY_dda   + 0.12;
   const rowY_beatLbl  = rowY_beat  + 0.12;
   const rowY_timeLbl  = rowY_time  + 0.10;
-  const rowY_ctrl1  = -0.72; // restart
-  const rowY_ctrl2  = -0.80; // start/resume/quit
+  const rowY_ctrl   = -0.80; // Steuer-Buttons
   const positionsX  = [-0.70, 0, 0.70];
   // Position the song selection panel with a small gap to the right of the main menu
   const songPanelX = 1.55;
@@ -577,10 +576,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   genderFemaleBtn.position.set(positionsX[2], rowY_body, 0.007);
   group.add(heightField, genderMaleBtn, genderFemaleBtn);
 
-  resumeBtn.position.set(-0.35, rowY_ctrl2, 0.007);
-  restartBtn.position.set(0, rowY_ctrl1, 0.007);
-  startBtn.position.set(-0.35, rowY_ctrl2, 0.007);
-  quitBtn.position.set(0.35, rowY_ctrl2, 0.007);
+  resumeBtn.position.set(positionsX[0], rowY_ctrl, 0.007);
+  restartBtn.position.set(positionsX[2], rowY_ctrl, 0.007);
+  startBtn.position.set(positionsX[0], rowY_ctrl, 0.007);
+  quitBtn.position.set(positionsX[1], rowY_ctrl, 0.007);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
   // Auswahlzustand
