@@ -701,7 +701,11 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     if (kind==='difficulty'){
       selDiff=index; setSelected(diffButtons, selDiff); ls?.setItem('selDiff', selDiff.toString());
       const lbl = diffLabels[index];
-      const diffName = lbl === 'Jab-Only' ? 'JabOnly' : lbl;
+      const diffName = lbl === 'Jab-Only'
+        ? 'JabOnly'
+        : lbl === 'Doppelfaust'
+          ? 'Doppelfaust'
+          : lbl;
       return { action:'set-difficulty', value: selDiff, diffName };
     }
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); ls?.setItem('selSpeed', selSpeed.toString()); return { action:'set-speed', value: selSpeed }; }
