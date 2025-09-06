@@ -94,6 +94,10 @@ const POOLS = {
     patMixStraightThenS, patMixStraightThenS, patMixStraightThenS,
     patTriplet, patTriplet
   ],
+  'Doppelfaust': [
+    // ausschließlich simultane Geraden
+    patDoubleStraight
+  ],
   'JabOnly': [
     patLRStraight, patLRStraight,
     patRLStraight, patRLStraight,
