@@ -684,7 +684,12 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   function click(btn){
     if (!btn || !btn.visible || btn.userData.disabled) return null;
     const { kind, index } = btn.userData;
-    if (kind==='difficulty'){ selDiff=index; setSelected(diffButtons, selDiff); ls?.setItem('selDiff', selDiff.toString()); return { action:'set-difficulty', value: selDiff }; }
+    if (kind==='difficulty'){
+      selDiff=index; setSelected(diffButtons, selDiff); ls?.setItem('selDiff', selDiff.toString());
+      const lbl = diffLabels[index];
+      const diffName = lbl === 'Jab-Only' ? 'JabOnly' : lbl;
+      return { action:'set-difficulty', value: selDiff, diffName };
+    }
     if (kind==='speed'){ selSpeed=index; setSelected(speedButtons, selSpeed); ls?.setItem('selSpeed', selSpeed.toString()); return { action:'set-speed', value: selSpeed }; }
     if (kind==='dda'){ selDda=index; setSelected(ddaButtons, selDda); return { action:'set-dda', value: selDda }; }
     if (kind==='beat'){ selBeat=index; setSelected(beatButtons, selBeat); ls?.setItem('selBeat', selBeat.toString()); return { action:'set-beat', value: selBeat }; }

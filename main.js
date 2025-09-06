@@ -165,18 +165,18 @@ function rumble(intensity=0.8, durationMs=60){
 }
 
 /* =================== Menü / Presets / Zeitmodi =================== */
-const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi'];
+const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi','Jab-Only'];
 const SPEED_LABELS = ['Langsam','Mittel','Schnell'];
 const TIME_LABELS  = ['1:00','3:00','5:00'];
 const DDA_LABELS  = ['Aus','50%','100%'];
 const BEAT_LABELS = ['Aus','An'];
 
-const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25 };
+const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25, 'JabOnly':1.00 };
 const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
 
 // Extreme (immer gerade)
 const WIDE_EXT_M = 0.20, DEEP_EXT_M = 0.20;
-const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,deep:0.12}, 'Profi':{wide:0.22,deep:0.22} };
+const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,deep:0.12}, 'Profi':{wide:0.22,deep:0.22}, 'JabOnly':{wide:0.0,deep:0.0} };
 
 // Vertikale S-Kurve: sanfter Downtrend
 const VDRIFT_BIAS_MIN = 0.05, VDRIFT_BIAS_MAX = 0.15;
@@ -215,8 +215,10 @@ function beginCountdown(){
     stopMusic();
     preloadMusic(sel.songUrl);
   }
+  const diffLabel = DIFF_LABELS[sel.difficultyIndex];
+  const diffName = diffLabel === 'Jab-Only' ? 'JabOnly' : diffLabel;
   applyGamePreset(
-    DIFF_LABELS[sel.difficultyIndex],
+    diffName,
     SPEED_LABELS[sel.speedIndex],
     TIME_LABELS[sel.timeIndex]
   );
@@ -282,6 +284,9 @@ function applyGamePreset(diffName, speedName, timeLabel){
   // auf Basiswerte zurück
   tuning.spawnInterval = baseSpawnInterval;
   tuning.straightShare = baseStraightShare;
+  if (diffName === 'JabOnly') {
+    tuning.straightShare = 1.0;
+  }
   const ext = EXT_PROB[diffName] ?? EXT_PROB['Aufsteiger'];
   tuning.wideProb = ext.wide; tuning.deepProb = ext.deep;
 
@@ -299,7 +304,8 @@ function applyGamePreset(diffName, speedName, timeLabel){
   ddaTimer = 0;
   lastDdaHits = hits; lastDdaMisses = misses; lastDdaHazHits = hazardHits;
 
-  hud.set({ note: `${diffName} · ${speedName} · ${timeLabel}` });
+  const displayDiff = diffName === 'JabOnly' ? 'Jab-Only' : diffName;
+  hud.set({ note: `${displayDiff} · ${speedName} · ${timeLabel}` });
 }
 
 /* ======================== Assets & Score ======================== */
@@ -606,6 +612,15 @@ for (const c of controllers){
     if (action.action==='start' || action.action==='restart'){ beginCountdown(); }
     else if (action.action==='resume'){ closeMenuResume(); }
     else if (action.action==='quit'){ const s=renderer.xr.getSession?.(); if (s) s.end(); }
+    else if (action.action==='set-difficulty'){
+      const sel = menu.getSelection();
+      const diffName = action.diffName;
+      applyGamePreset(
+        diffName,
+        SPEED_LABELS[sel.speedIndex],
+        TIME_LABELS[sel.timeIndex]
+      );
+    }
   });
 }
 function intersectHitPlane(controller){
