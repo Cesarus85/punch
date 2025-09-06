@@ -196,8 +196,9 @@ function placeCountdown(){
   _v2.copy(_v1).sub(iForward);
   countdown.plane.position.copy(_v1); countdown.plane.lookAt(_v2);
 }
-function beginCountdown(){
+function beginCountdown(songUrl){
   const sel = menu.getSelection();
+  game.songUrl = songUrl ?? sel.songUrl ?? null;
   applyGamePreset(
     DIFF_LABELS[sel.difficultyIndex],
     SPEED_LABELS[sel.speedIndex],
@@ -584,9 +585,9 @@ for (const c of controllers){
     const hit = intersectHitPlane(c); if (!hit) return;
     const btn = menu.pickButtonAtWorldPoint(hit.point);
     const action = menu.click(btn); if (!action) return;
-    if (action.action==='start'){ game.songUrl = action.songUrl || null; beginCountdown(); }
+    if (action.action==='start'){ beginCountdown(action.songUrl); }
     else if (action.action==='resume'){ closeMenuResume(); }
-    else if (action.action==='restart'){ game.songUrl = action.songUrl || null; beginCountdown(); }
+    else if (action.action==='restart'){ beginCountdown(action.songUrl); }
     else if (action.action==='quit'){ const s=renderer.xr.getSession?.(); if (s) s.end(); }
   });
 }
