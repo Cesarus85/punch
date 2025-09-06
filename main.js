@@ -34,7 +34,7 @@ import {
   hitSound,
   playKick,
   missSound,
-  penaltySound,
+  playCrash,
   pauseMusic,
   resumeMusic,
   stopMusic,
@@ -559,7 +559,7 @@ function onHazardHit(h){
   // hitParticles.burst(h.position.clone());
   setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
-  if (AUDIO_ENABLED) penaltySound();
+  if (AUDIO_ENABLED) playCrash();
   // Emphasize hazard impact with short, high-intensity rumble
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
   hazardFlash.start();
@@ -574,7 +574,7 @@ function onHazardFistHit(h){
   // hitParticles.burst(h.position.clone());
   setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
   hazardHits++; streak=0; score=Math.max(0, score-HAZARD_PENALTY);
-  if (AUDIO_ENABLED) penaltySound();
+  if (AUDIO_ENABLED) playCrash();
   rumble(HAZARD_RUMBLE_INTENSITY, HAZARD_RUMBLE_DURATION);
   hazardFlash.start();
   hud.flashHazard();
