@@ -123,7 +123,7 @@ export class FistsManager {
       this.vel[i].lerp(v, alpha);
       this.prev[i].copy(pos);
 
-      fists.push({ pos: pos.clone(), vel: this.vel[i].clone() });
+      fists.push({ pos: pos.clone(), vel: this.vel[i].clone(), speed: this.vel[i].length() });
     }
     this._initialized = true;
     return fists;

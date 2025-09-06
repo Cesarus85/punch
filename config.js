@@ -77,6 +77,10 @@ export const SPRINT_DURATION = 60;            // Sekunden
 export const COMBO_STEP = 5;                  // alle 5 Treffer +1 Multiplikator
 export const COMBO_MAX_MULT = 5;              // max. x5
 
+// --- Calories ---
+export const CAL_SPEED_FACTOR = 0.1;          // kcal contribution per m/s
+export const CAL_HIT_FACTOR   = 0.5;          // kcal bonus per hit
+
 // --- Player Body Configuration ---
 export let BODY_HEIGHT = 1.75;                // default body height in meters
 export let SHOULDER_WIDTH = 0.47;             // default shoulder width in meters

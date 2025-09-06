@@ -13,11 +13,12 @@ export function createHUD(scene){
   plane.name = 'scoreboard';
   scene.add(plane);
 
-  const state = {
-    hits: 0, misses: 0, score: 0, streak: 0,
-    mode: 'time60', timeLeft: 60, best: null,
-    note: '' // kurze Hinweise wie "Zeit!"
-  };
+    const state = {
+      hits: 0, misses: 0, score: 0, streak: 0,
+      mode: 'time60', timeLeft: 60, best: null,
+      note: '', // kurze Hinweise wie "Zeit!"
+      calories: 0
+    };
 
   let hazardFlashActive = false;
   let hazardFlashTimeout;
@@ -71,11 +72,14 @@ export function createHUD(scene){
     ctx.fillStyle = '#ffd166';
     ctx.fillText(`Streak: ${state.streak}`, 430, 240);
 
+    ctx.fillStyle = '#ffa500';
+    ctx.fillText(`Kcal: ${state.calories.toFixed(1)}`, 24, 300);
+
     // Note
     if (state.note) {
       ctx.fillStyle = '#ffcc00';
       ctx.font = 'bold 34px system-ui, Arial';
-      ctx.fillText(state.note, 24, 308);
+      ctx.fillText(state.note, 24, 348);
     }
 
     if (hazardFlashActive){

@@ -19,7 +19,9 @@ import {
   BEAT_SNAP_ENABLED,
   setBeatSnapEnabled,
   setBpm,
-  DEFAULT_BPM
+  DEFAULT_BPM,
+  CAL_SPEED_FACTOR,
+  CAL_HIT_FACTOR
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -305,8 +307,9 @@ await loadBall();
 await loadHazard();
 const balls=[], hazards=[];
 let hits=0, misses=0, score=0, streak=0, hazardHits=0;
+let calories=0;
 function comboMultiplier(){ if (streak<=0) return 1; const m=1+Math.floor(streak/5); return Math.min(4, m); }
-function updateHUD(note=''){ hud.set({ hits, misses, score, streak, mode:gameMode, timeLeft, best:null, note }); }
+function updateHUD(note=''){ hud.set({ hits, misses, score, streak, mode:gameMode, timeLeft, best:null, note, calories }); }
 
 /* ===================== Debug-Ring (optional) ===================== */
 let _debugRing=null, _debugRingTimer=0;
@@ -560,6 +563,7 @@ function hardResetRound(){
   for (const b of [...balls]){ freeBall(b.index); }
   for (const h of [...hazards]){ freeHazard(h.index); }
   balls.length=0; hazards.length=0; hits=0; misses=0; score=0; streak=0; hazardHits=0;
+  calories=0; if (typeof loop._lastHits === 'number') loop._lastHits = 0;
   updateHUD('');
 }
 function clearActiveObjectsKeepScore(){
@@ -771,6 +775,7 @@ function loop(){
   }
 
   const fists = fistsMgr.update(dt);
+  let speedSum = 0; for (const f of fists) speedSum += f.speed;
 
   // Zeitmodus
   let canSpawn = game.running;
@@ -911,6 +916,11 @@ function loop(){
   if (renderer.xr.isPresenting) {
     hazardFlash.updateVR(camera, performance.now());
   }
+
+  if (loop._lastHits === undefined) loop._lastHits = 0;
+  const hitsDelta = hits - loop._lastHits;
+  calories += CAL_SPEED_FACTOR * speedSum * dt + CAL_HIT_FACTOR * hitsDelta;
+  loop._lastHits = hits;
 
   updateHUD(countdown.active ? '' : (game.menuActive ? 'Konfigurieren & Starten' : (backBtn.visible ? 'Zeit abgelaufen' : '')));
   renderer.render(scene, camera);
