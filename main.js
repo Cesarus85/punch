@@ -32,6 +32,7 @@ import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBa
 import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, getHazardAxisAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
 import {
   hitSound,
+  playKick,
   missSound,
   penaltySound,
   pauseMusic,
@@ -533,7 +534,12 @@ function onBallHit(b){
   hitParticles.burst(b.position.clone());
   setTimeout(()=>freeBall(b.index), DISSOLVE_DURATION*1000);
   hits++; streak++; score+=comboMultiplier();
-  const now=performance.now(); if (AUDIO_ENABLED && now-_lastHitAt>40){ hitSound(); _lastHitAt=now; }
+  const now=performance.now();
+  if (AUDIO_ENABLED && now-_lastHitAt>40){
+    playKick();
+    hitSound();
+    _lastHitAt=now;
+  }
   rumble(0.9,60);
   flashHit();
   updateHUD();
