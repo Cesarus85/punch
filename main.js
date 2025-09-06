@@ -41,7 +41,8 @@ import {
   preloadMusic,
   isMusicReady,
   startLoadedMusic,
-  startFlying
+  startFlying,
+  stopFlying
 } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
@@ -601,14 +602,15 @@ function fistsHitHazard(p,fists){
 function hardResetRound(){
   for (const b of [...balls]){ freeBall(b.index); }
   for (const h of [...hazards]){ freeHazard(h.index); }
-  balls.length=0; hazards.length=0; hits=0; misses=0; score=0; streak=0; hazardHits=0;
+  balls.length=0; hazards.length=0; if (hazards.length === 0) stopFlying();
+  hits=0; misses=0; score=0; streak=0; hazardHits=0;
   calories=0; if (typeof loop._lastHits === 'number') loop._lastHits = 0;
   updateHUD('');
 }
 function clearActiveObjectsKeepScore(){
   for (const b of [...balls]){ freeBall(b.index); }
   for (const h of [...hazards]){ freeHazard(h.index); }
-  balls.length=0; hazards.length=0;
+  balls.length=0; hazards.length=0; if (hazards.length === 0) stopFlying();
 }
 
 /* ==================== Controller Rays & Menü ==================== */
@@ -932,7 +934,12 @@ function loop(){
 
   // Hazards – Update (Körper = Flash, Faust = nur Haptik)
   for (let i=hazards.length-1;i>=0;i--){
-    const h=hazards[i]; if(!h.alive){ hazards.splice(i,1); continue; }
+    const h=hazards[i];
+    if(!h.alive){
+      hazards.splice(i,1);
+      if (hazards.length === 0) stopFlying();
+      continue;
+    }
     h.basePos.addScaledVector(h.velocity, dt);
     h.position.copy(h.basePos);
     _m1.makeTranslation(h.basePos.x, h.basePos.y, h.basePos.z);
@@ -943,8 +950,18 @@ function loop(){
     getHazardMesh().setMatrixAt(h.index,_m1);
 
     const p = h.position;
-    if (hazardHitsBody(p)){ onHazardHit(h); hazards.splice(i,1); continue; }
-    if (fistsHitHazard(p,fists)){ onHazardFistHit(h); hazards.splice(i,1); continue; }
+    if (hazardHitsBody(p)){
+      onHazardHit(h);
+      hazards.splice(i,1);
+      if (hazards.length === 0) stopFlying();
+      continue;
+    }
+    if (fistsHitHazard(p,fists)){
+      onHazardFistHit(h);
+      hazards.splice(i,1);
+      if (hazards.length === 0) stopFlying();
+      continue;
+    }
 
     const dot = _v2.subVectors(h.position, iPos).dot(iForward);
     if (h.prevDot>MISS_PLANE_OFFSET && dot<=MISS_PLANE_OFFSET){ h.missed = true; }
@@ -953,9 +970,16 @@ function loop(){
       dissolveHazard(h.index, elapsed);
       setTimeout(()=>freeHazard(h.index), DISSOLVE_DURATION*1000);
       hazards.splice(i,1);
+      if (hazards.length === 0) stopFlying();
       continue;
     }
-    if (dot<-6.0){ h.alive=false; freeHazard(h.index); hazards.splice(i,1); continue; }
+    if (dot<-6.0){
+      h.alive=false;
+      freeHazard(h.index);
+      hazards.splice(i,1);
+      if (hazards.length === 0) stopFlying();
+      continue;
+    }
     h.prevDot = dot;
   }
   getHazardMesh().instanceMatrix.needsUpdate = true;
@@ -988,7 +1012,7 @@ renderer.xr.addEventListener('sessionend', ()=>{
   renderer.setSize(window.innerWidth, window.innerHeight);
   for (const b of balls){ freeBall(b.index); }
   for (const h of hazards){ freeHazard(h.index); }
-  balls.length=0; hazards.length=0;
+  balls.length=0; hazards.length=0; if (hazards.length === 0) stopFlying();
   if (_debugRing){ scene.remove(_debugRing); _debugRing=null; }
   menu.setVisible(false); setLasersVisible(false); hideBackToMenuButton();
   game.menuActive=false; hud.plane.visible=false;
