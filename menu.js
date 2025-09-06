@@ -623,6 +623,9 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
 
   // Modus: 'prestart' | 'ingame'
   let mode = 'prestart';
+  function getMode(){
+    return mode;
+  }
   function setMode(m){
     mode = m;
     const pre = (mode==='prestart');
@@ -752,5 +755,5 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
     }
   }
 
-  return { group, panel, hitPlane, setVisible, placeAt, setMode, setHover, pickButtonAtWorldPoint, click, getSelection, updateAnimation };
+  return { group, panel, hitPlane, setVisible, placeAt, setMode, getMode, setHover, pickButtonAtWorldPoint, click, getSelection, updateAnimation };
 }
