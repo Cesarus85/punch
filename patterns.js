@@ -59,6 +59,15 @@ function patMixStraightThenS(){
     { items:[{ side:b, style:sStyle }] },
   ]};
 }
+
+function patMixStraightThenSV(){
+  // Erst gerade auf Seite A, dann vertikale S auf Seite B
+  const a = randSide(); const b = -a;
+  return { name:'MixStraightThenSV', steps:[
+    { items:[{ side:a, style:'straight' }] },
+    { items:[{ side:b, style:'s-v' }] },
+  ]};
+}
 function patTriplet(){
   // Dreierfolge (lesbarer Rhythmus)
   const a = randSide(), b = -a;
@@ -66,6 +75,16 @@ function patTriplet(){
   return { name:'Triplet', steps:[
     { items:[{ side:a, style:'auto' }] },
     { items:[{ side:b, style:midStyle }] },
+    { items:[{ side:a, style:'auto' }] },
+  ]};
+}
+
+function patTripletV(){
+  // Dreierfolge mit vertikaler S in der Mitte
+  const a = randSide(), b = -a;
+  return { name:'TripletV', steps:[
+    { items:[{ side:a, style:'auto' }] },
+    { items:[{ side:b, style:'s-v' }] },
     { items:[{ side:a, style:'auto' }] },
   ]};
 }
@@ -97,6 +116,11 @@ const POOLS = {
   'Doppelfaust': [
     // ausschließlich simultane Geraden
     patDoubleStraight
+  ],
+  'DuckWeave': [
+    patS_V, patS_V, patS_V, patS_V,
+    patMixStraightThenSV, patMixStraightThenSV,
+    patTripletV, patTripletV
   ],
   'JabOnly': [
     patLRStraight, patLRStraight,
