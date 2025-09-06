@@ -32,6 +32,7 @@ import {
   penaltySound,
   pauseMusic,
   resumeMusic,
+  stopMusic,
   preloadMusic,
   isMusicReady,
   startLoadedMusic
@@ -208,7 +209,10 @@ function placeCountdown(){
 function beginCountdown(){
   const sel = menu.getSelection();
   game.songUrl = sel.songUrl || null;
-  if (MUSIC_ENABLED && sel.songUrl) preloadMusic(sel.songUrl);
+  if (MUSIC_ENABLED && sel.songUrl) {
+    stopMusic();
+    preloadMusic(sel.songUrl);
+  }
   applyGamePreset(
     DIFF_LABELS[sel.difficultyIndex],
     SPEED_LABELS[sel.speedIndex],
