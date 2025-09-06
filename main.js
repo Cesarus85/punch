@@ -766,7 +766,7 @@ function loop(){
       const gp=src.gamepad; if (!gp) continue;
       if (isRisingEdgeAX(gp, `${src.handedness}:AX`, loop._btnPrev)){
         if (game.running && !game.menuActive) openMenuIngame();
-        else if (game.menuActive)            closeMenuResume();
+        else if (game.menuActive && menu.getMode() === 'ingame') closeMenuResume();
       }
     }
   }
@@ -778,7 +778,7 @@ function loop(){
     const v = fistsMgr.isVGesture(i);
     if (v && !loop._vPrev[key]){
       if (game.running && !game.menuActive) openMenuIngame();
-      else if (game.menuActive)            closeMenuResume();
+      else if (game.menuActive && menu.getMode() === 'ingame') closeMenuResume();
     }
     loop._vPrev[key] = v;
   }
