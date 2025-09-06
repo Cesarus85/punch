@@ -5,6 +5,13 @@ let ctx = null;
 let musicSource = null;
 let pending = null;
 
+// --- Sound Effects ---
+// Preload SFX as HTMLAudioElements so they can be triggered quickly.
+const kickSound = new Audio('./assets/sfx/kick.mp3');
+const flyingSound = new Audio('./assets/sfx/flying.mp3');
+const crashSound = new Audio('./assets/sfx/crash.mp3');
+let flyingInstance = null; // currently playing flying sound
+
 function ensureCtx() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === 'suspended') ctx.resume();
@@ -30,6 +37,43 @@ export function hitSound()  { blip(700, 90, 'triangle', 0.08); }
 export function missSound() { blip(420, 70, 'sine',     0.05); }
 // Penalty = tiefer + leicht länger
 export function penaltySound(){ blip(220, 120, 'sawtooth', 0.08); }
+
+// --- External SFX ---
+export function playKick(){
+  if (!AUDIO_ENABLED) return;
+  try {
+    kickSound.currentTime = 0;
+    kickSound.play();
+  } catch {}
+}
+
+export function startFlying(){
+  if (!AUDIO_ENABLED) return;
+  stopFlying();
+  flyingInstance = flyingSound;
+  flyingInstance.loop = true;
+  try {
+    flyingInstance.currentTime = 0;
+    flyingInstance.play();
+  } catch {}
+}
+
+export function stopFlying(){
+  if (flyingInstance){
+    try { flyingInstance.pause(); } catch {}
+    flyingInstance.currentTime = 0;
+    flyingInstance = null;
+  }
+}
+
+export function playCrash(){
+  if (!AUDIO_ENABLED) return;
+  stopFlying();
+  try {
+    crashSound.currentTime = 0;
+    crashSound.play();
+  } catch {}
+}
 
 function getPeaksAtThreshold(data, threshold){
   const peaks = [];
