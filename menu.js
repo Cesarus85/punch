@@ -553,7 +553,10 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   const rowY_beatLbl  = rowY_beat  + 0.12;
   const rowY_timeLbl  = rowY_time  + 0.10;
   const rowY_ctrl   = -0.80; // Steuer-Buttons
-  const positionsX  = [-0.70, 0, 0.70];
+  const getPositionsX = (count, spacing = 0.70) => {
+    const start = -(spacing * (count - 1)) / 2;
+    return Array.from({ length: count }, (_, i) => start + i * spacing);
+  };
   // Position the song selection panel with a small gap to the right of the main menu
   const songPanelX = 1.55;
   songPanel.position.set(songPanelX, rowY_time + 0.10, 0.006);
@@ -564,22 +567,33 @@ export function createMenu(diffLabels, speedLabels, timeLabels, ddaLabels, beatL
   beatLabelMesh.position.set(0, rowY_beatLbl, 0.007);  group.add(beatLabelMesh);
   timeLabelMesh.position.set(0, rowY_timeLbl, 0.007);  group.add(timeLabelMesh);
 
-  diffButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_diff, 0.007); group.add(b); });
-  speedButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_speed, 0.007); group.add(b); });
-  ddaButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_dda, 0.007); group.add(b); });
-  beatButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_beat, 0.007); group.add(b); });
-  timeButtons.forEach((b,i)=>{ b.position.set(positionsX[i], rowY_time, 0.007); group.add(b); });
+  const diffPosX = getPositionsX(diffButtons.length);
+  diffButtons.forEach((b,i)=>{ b.position.set(diffPosX[i], rowY_diff, 0.007); group.add(b); });
+
+  const speedPosX = getPositionsX(speedButtons.length);
+  speedButtons.forEach((b,i)=>{ b.position.set(speedPosX[i], rowY_speed, 0.007); group.add(b); });
+
+  const ddaPosX = getPositionsX(ddaButtons.length);
+  ddaButtons.forEach((b,i)=>{ b.position.set(ddaPosX[i], rowY_dda, 0.007); group.add(b); });
+
+  const beatPosX = getPositionsX(beatButtons.length);
+  beatButtons.forEach((b,i)=>{ b.position.set(beatPosX[i], rowY_beat, 0.007); group.add(b); });
+
+  const timePosX = getPositionsX(timeButtons.length);
+  timeButtons.forEach((b,i)=>{ b.position.set(timePosX[i], rowY_time, 0.007); group.add(b); });
 
   // Größe und Geschlecht
-  heightField.position.set(positionsX[0], rowY_body, 0.007);
-  genderMaleBtn.position.set(positionsX[1], rowY_body, 0.007);
-  genderFemaleBtn.position.set(positionsX[2], rowY_body, 0.007);
+  const bodyPosX = getPositionsX(3);
+  heightField.position.set(bodyPosX[0], rowY_body, 0.007);
+  genderMaleBtn.position.set(bodyPosX[1], rowY_body, 0.007);
+  genderFemaleBtn.position.set(bodyPosX[2], rowY_body, 0.007);
   group.add(heightField, genderMaleBtn, genderFemaleBtn);
 
-  resumeBtn.position.set(positionsX[0], rowY_ctrl, 0.007);
-  restartBtn.position.set(positionsX[2], rowY_ctrl, 0.007);
-  startBtn.position.set(positionsX[0], rowY_ctrl, 0.007);
-  quitBtn.position.set(positionsX[1], rowY_ctrl, 0.007);
+  const ctrlPosX = getPositionsX(3);
+  resumeBtn.position.set(ctrlPosX[0], rowY_ctrl, 0.007);
+  restartBtn.position.set(ctrlPosX[2], rowY_ctrl, 0.007);
+  startBtn.position.set(ctrlPosX[0], rowY_ctrl, 0.007);
+  quitBtn.position.set(ctrlPosX[1], rowY_ctrl, 0.007);
   group.add(resumeBtn, restartBtn, startBtn, quitBtn);
 
   // Auswahlzustand
