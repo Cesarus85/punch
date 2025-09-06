@@ -26,7 +26,16 @@ import { createHUD } from './hud.js';
 import { FistsManager } from './fists.js';
 import { loadBall, isBallReady, getBallMesh, getBallAttribute, allocBall, freeBall, dissolveBall } from './ball.js';
 import { loadHazard, isHazardReady, getHazardMesh, getHazardAttribute, getHazardAxisAttribute, allocHazard, freeHazard, dissolveHazard } from './hazard.js';
-import { hitSound, missSound, penaltySound, playMusic, pauseMusic, resumeMusic } from './audio.js';
+import {
+  hitSound,
+  missSound,
+  penaltySound,
+  pauseMusic,
+  resumeMusic,
+  preloadMusic,
+  isMusicReady,
+  startLoadedMusic
+} from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
 import { flashHit, flashMiss, hazardFlash } from './effects.js';
@@ -199,6 +208,7 @@ function placeCountdown(){
 function beginCountdown(){
   const sel = menu.getSelection();
   game.songUrl = sel.songUrl || null;
+  if (MUSIC_ENABLED && sel.songUrl) preloadMusic(sel.songUrl);
   applyGamePreset(
     DIFF_LABELS[sel.difficultyIndex],
     SPEED_LABELS[sel.speedIndex],
@@ -743,10 +753,15 @@ function loop(){
     countdown.time -= dt; const n=Math.max(0,Math.ceil(countdown.time));
     drawCountdown(n); placeCountdown();
     if (countdown.time<=0){
-      countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true;
-      if (MUSIC_ENABLED && game.songUrl){ playMusic(game.songUrl); }
-      else { setBpm(DEFAULT_BPM); resetBeats(); }
-      updateHUD('');
+      if (!MUSIC_ENABLED || !game.songUrl || isMusicReady()){
+        countdown.active=false; countdown.plane.visible=false; hud.plane.visible=true; game.running=true;
+        if (MUSIC_ENABLED && game.songUrl){ startLoadedMusic(); }
+        else { setBpm(DEFAULT_BPM); resetBeats(); }
+        updateHUD('');
+      } else {
+        drawCountdown('…');
+        countdown.plane.visible=true;
+      }
     }
     else { countdown.plane.visible=true; }
   }

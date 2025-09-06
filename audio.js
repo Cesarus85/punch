@@ -3,6 +3,7 @@ import { resetBeats } from './beat.js';
 
 let ctx = null;
 let musicSource = null;
+let pending = null;
 
 function ensureCtx() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -72,24 +73,43 @@ function estimateBpm(buffer){
   return groups.length ? groups[0].tempo : 120;
 }
 
-export async function playMusic(url){
+export async function preloadMusic(url){
   if (!AUDIO_ENABLED || !MUSIC_ENABLED) return;
   if (!ensureCtx()) return;
-  if (musicSource){ musicSource.stop(); musicSource.disconnect(); }
+  pending = null;
   try {
     const res = await fetch(url);
     const buf = await res.arrayBuffer();
-    const audioBuffer = await ctx.decodeAudioData(buf);
-    const bpm = estimateBpm(audioBuffer);
-    setBpm(bpm);
-    resetBeats();
-    musicSource = ctx.createBufferSource();
-    musicSource.buffer = audioBuffer;
-    musicSource.connect(ctx.destination);
-    musicSource.start();
+    const data = await ctx.decodeAudioData(buf);
+    const bpm = estimateBpm(data);
+    pending = { url, data, bpm };
   } catch(err){
-    console.error('playMusic failed', err);
+    console.error('preloadMusic failed', err);
   }
+}
+
+export function isMusicReady(){
+  return !!pending;
+}
+
+export function startLoadedMusic(){
+  if (!pending) return;
+  if (musicSource){
+    try{ musicSource.stop(); }catch{}
+    musicSource.disconnect();
+  }
+  setBpm(pending.bpm);
+  resetBeats();
+  musicSource = ctx.createBufferSource();
+  musicSource.buffer = pending.data;
+  musicSource.connect(ctx.destination);
+  musicSource.start();
+  pending = null;
+}
+
+export async function playMusic(url){
+  await preloadMusic(url);
+  startLoadedMusic();
 }
 
 export function pauseMusic(){
