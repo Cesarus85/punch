@@ -40,7 +40,8 @@ import {
   stopMusic,
   preloadMusic,
   isMusicReady,
-  startLoadedMusic
+  startLoadedMusic,
+  startFlying
 } from './audio.js';
 import { createMenu } from './menu.js';
 import { pickPattern } from './patterns.js'; // << NEU
@@ -504,6 +505,7 @@ function spawnHazard(sideSign){
       attr.array[aIndex+3] = 0;
     }
     attr.needsUpdate = true;
+    startFlying();
     return _v1.clone();
   }
 
