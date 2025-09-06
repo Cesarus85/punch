@@ -165,18 +165,18 @@ function rumble(intensity=0.8, durationMs=60){
 }
 
 /* =================== Menü / Presets / Zeitmodi =================== */
-const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi','Doppelfaust','Jab-Only'];
+const DIFF_LABELS = ['Anfänger','Aufsteiger','Profi','Duck & Weave','Doppelfaust','Jab-Only'];
 const SPEED_LABELS = ['Langsam','Mittel','Schnell'];
 const TIME_LABELS  = ['1:00','3:00','5:00'];
 const DDA_LABELS  = ['Aus','50%','100%'];
 const BEAT_LABELS = ['Aus','An'];
 
-const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25, 'Doppelfaust':1.00, 'JabOnly':1.00 };
+const DIFFICULTY_STRAIGHT_SHARE = { 'Anfänger':1.00, 'Aufsteiger':0.70, 'Profi':0.25, 'DuckWeave':0.30, 'Doppelfaust':1.00, 'JabOnly':1.00 };
 const SPEED_PRESETS = { 'Langsam':0.85, 'Mittel':1.0, 'Schnell':1.25 };
 
 // Extreme (immer gerade)
 const WIDE_EXT_M = 0.20, DEEP_EXT_M = 0.20;
-const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,deep:0.12}, 'Profi':{wide:0.22,deep:0.22}, 'Doppelfaust':{wide:0.0,deep:0.0}, 'JabOnly':{wide:0.0,deep:0.0} };
+const EXT_PROB = { 'Anfänger':{wide:0.05,deep:0.05}, 'Aufsteiger':{wide:0.12,deep:0.12}, 'Profi':{wide:0.22,deep:0.22}, 'DuckWeave':{wide:0.05,deep:0.70}, 'Doppelfaust':{wide:0.0,deep:0.0}, 'JabOnly':{wide:0.0,deep:0.0} };
 
 // Vertikale S-Kurve: sanfter Downtrend
 const VDRIFT_BIAS_MIN = 0.05, VDRIFT_BIAS_MAX = 0.15;
@@ -216,7 +216,11 @@ function beginCountdown(){
     preloadMusic(sel.songUrl);
   }
   const diffLabel = DIFF_LABELS[sel.difficultyIndex];
-  const diffName = diffLabel === 'Jab-Only' ? 'JabOnly' : diffLabel;
+  const diffName = diffLabel === 'Jab-Only'
+    ? 'JabOnly'
+    : diffLabel === 'Duck & Weave'
+      ? 'DuckWeave'
+      : diffLabel;
   applyGamePreset(
     diffName,
     SPEED_LABELS[sel.speedIndex],
@@ -293,6 +297,10 @@ function applyGamePreset(diffName, speedName, timeLabel){
   }
   const ext = EXT_PROB[diffName] ?? EXT_PROB['Aufsteiger'];
   tuning.wideProb = ext.wide; tuning.deepProb = ext.deep;
+  if (diffName === 'DuckWeave') {
+    tuning.deepProb = 0.7;
+    tuning.straightShare = 0.2;
+  }
 
   const sMul = SPEED_PRESETS[speedName] ?? 1.0;
   tuning.ballSpeed   = BALL_SPEED   * sMul;
@@ -308,7 +316,11 @@ function applyGamePreset(diffName, speedName, timeLabel){
   ddaTimer = 0;
   lastDdaHits = hits; lastDdaMisses = misses; lastDdaHazHits = hazardHits;
 
-  const displayDiff = diffName === 'JabOnly' ? 'Jab-Only' : diffName;
+  const displayDiff = diffName === 'JabOnly'
+    ? 'Jab-Only'
+    : diffName === 'DuckWeave'
+      ? 'Duck & Weave'
+      : diffName;
   hud.set({ note: `${displayDiff} · ${speedName} · ${timeLabel}` });
 }
 
@@ -398,11 +410,18 @@ function spawnBall(sideSign,{style='auto'}={}){
         const f = randRange(tuning.driftMinFreq, tuning.driftMaxFreq);
         driftOmega = 2*Math.PI*f; driftPhase = Math.random()*Math.PI*2;
 
-        if (explicitSV){ driftAxisIdx = 1; driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX); }
+        if (explicitSV){
+          driftAxisIdx = 1;
+          driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+          if (currentDiffName === 'DuckWeave') driftBiasRate *= 2;
+        }
         else if (explicitSH){ driftAxisIdx = 0; }
         else {
           driftAxisIdx = Math.random()<0.5 ? 0 : 1;
-          if (driftAxisIdx===1) driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+          if (driftAxisIdx===1){
+            driftBiasRate = randRange(VDRIFT_BIAS_MIN, VDRIFT_BIAS_MAX);
+            if (currentDiffName === 'DuckWeave') driftBiasRate *= 2;
+          }
         }
       }
     }
