@@ -20,6 +20,18 @@ function patRL(){
     { items:[{ side:L, style:'auto' }] },
   ]};
 }
+function patLRStraight(){
+  return { name:'LRStraight', steps:[
+    { items:[{ side:L, style:'straight' }] },
+    { items:[{ side:R, style:'straight' }] },
+  ]};
+}
+function patRLStraight(){
+  return { name:'RLStraight', steps:[
+    { items:[{ side:R, style:'straight' }] },
+    { items:[{ side:L, style:'straight' }] },
+  ]};
+}
 function patDoubleStraight(){
   // Doppelfaust – zwei gerade gleichzeitig
   return { name:'DoubleStraight', steps:[
@@ -81,6 +93,11 @@ const POOLS = {
     patS_V, patS_V, patS_V, patS_V,
     patMixStraightThenS, patMixStraightThenS, patMixStraightThenS,
     patTriplet, patTriplet
+  ],
+  'JabOnly': [
+    patLRStraight, patLRStraight,
+    patRLStraight, patRLStraight,
+    patDoubleStraight
   ]
 };
 
