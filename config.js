@@ -78,8 +78,13 @@ export const COMBO_STEP = 5;                  // alle 5 Treffer +1 Multiplikator
 export const COMBO_MAX_MULT = 5;              // max. x5
 
 // --- Calories ---
-export const CAL_SPEED_FACTOR = 0.1;          // kcal contribution per m/s
-export const CAL_HIT_FACTOR   = 0.5;          // kcal bonus per hit
+export const CAL_SPEED_FACTOR = 0.05;         // kcal contribution per m/s (for 70 kg)
+export const CAL_HIT_FACTOR   = 0.2;          // kcal bonus per hit (for 70 kg)
+export const CAL_WEIGHT_REF   = 70;           // reference weight in kg
+export let   USER_WEIGHT      = CAL_WEIGHT_REF; // current player weight in kg
+export function setUserWeight(w) {
+  if (typeof w === 'number' && w > 0) USER_WEIGHT = w;
+}
 
 // --- Player Body Configuration ---
 export let BODY_HEIGHT = 1.75;                // default body height in meters

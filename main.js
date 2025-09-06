@@ -21,7 +21,9 @@ import {
   setBpm,
   DEFAULT_BPM,
   CAL_SPEED_FACTOR,
-  CAL_HIT_FACTOR
+  CAL_HIT_FACTOR,
+  CAL_WEIGHT_REF,
+  USER_WEIGHT
 } from './config.js';
 
 import { createHUD } from './hud.js';
@@ -957,7 +959,8 @@ function loop(){
 
   if (loop._lastHits === undefined) loop._lastHits = 0;
   const hitsDelta = hits - loop._lastHits;
-  calories += CAL_SPEED_FACTOR * speedSum * dt + CAL_HIT_FACTOR * hitsDelta;
+  const weightFactor = USER_WEIGHT / CAL_WEIGHT_REF;
+  calories += (CAL_SPEED_FACTOR * speedSum * dt + CAL_HIT_FACTOR * hitsDelta) * weightFactor;
   loop._lastHits = hits;
 
   updateHUD(countdown.active ? '' : (game.menuActive ? 'Konfigurieren & Starten' : (backBtn.visible ? 'Zeit abgelaufen' : '')));
